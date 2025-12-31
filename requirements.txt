@@ -1,0 +1,8 @@
+# requirements.txt
+#
+# Core dependencies
+pyserial>=3.5
+async-timeout>=4.0
+
+# Development dependencies (optional)
+-r requirements-dev.txt

@@ -1,0 +1,15 @@
+# requirements-dev.txt
+#
+# Testing
+pytest>=7.0
+pytest-mock>=3.0
+pytest-cov>=4.0
+
+# Code quality
+flake8>=5.0
+black>=22.0
+mypy>=1.0
+
+# Packaging
+twine>=4.0
+wheel>=0.37
