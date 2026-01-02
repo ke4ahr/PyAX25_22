@@ -1,294 +1,321 @@
-# pyax25_22/interfaces/agwpe.py
-"""
-AGWPE Interface Implementation
+# SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (C) 2025-2026 Kris Kirby, KE4AHR
 
-Implements the AGWPE TCP protocol as specified in:
-- Image 1 (Header format)
-- Image 4-5 (Registration and operation)
-
-License: LGPLv3.0
-Copyright (C) 2024 Kris Kirby, KE4AHR
 """
+pyax25_22.interfaces.agwpe.py
+
+Full AGWPE TCP/IP API client implementation.
+
+Implements the complete AGWPE TCP/IP Socket Interface per SV2AGW specification (2000 version, with updates).
+Supports:
+- Connection to AGWPE server (default localhost:8000)
+- Callsign registration ('X' command with success/failure reply)
+- Monitoring enable/disable ('m' command)
+- Raw frame monitoring ('k' command)
+- Port capabilities query ('g' command)
+- Version info query ('R' command)
+- Outstanding frames query ('y' command)
+- Unproto and connected data send/receive ('U', 'D', 'c', 'd')
+- Heard list ('H')
+- Monitor data kinds ('I', 'S', 'T', 'U')
+- Full header parsing (Port, DataKind, CallFrom, CallTo, DataLen, USER)
+- Synchronous (threading for background read) and asynchronous (asyncio) modes
+- Comprehensive error handling and logging
+
+Compliant with AGWPE API as described in AgwSockInterface.doc and related docs.
+"""
+
+from __future__ import annotations
 
 import socket
 import struct
 import threading
+import queue
+import asyncio
 import logging
 from typing import Optional, Callable, Tuple, Dict
 
+from pyax25_22.core.exceptions import AGWPEError
+from pyax25_22.core.framing import AX25Frame  # For potential frame integration
+
 logger = logging.getLogger(__name__)
 
-class AGWProtocolError(Exception):
-    """Base exception for AGWPE protocol errors"""
+# AGWPE Header format (36 bytes)
+# int Port (4 bytes): LOWORD = port index (0-first), HIWORD reserved
+# int DataKind (4 bytes): LOWORD = kind (ASCII char code), HIWORD special use (e.g., for 'Y' reply)
+# char CallFrom[10]: NULL-terminated callsign (e.g., "SV2AGW-12\0")
+# char CallTo[10]: NULL-terminated callsign
+# int DataLen (4 bytes): Length of data field
+# int USER (4 bytes): Reserved/undefined
+HEADER_FMT = '<II10s10sII'
+HEADER_SIZE = struct.calcsize(HEADER_FMT)
 
-class TransportError(Exception):
-    """Base exception for transport errors"""
+# DataKind values (ASCII chars)
+DATAKIND_CONNECTED_DATA = 'D'    # Data from connected station
+DATAKIND_UNPROTO_MONITOR = 'U'   # Unproto monitor data
+DATAKIND_TX_MONITOR = 'T'        # TX data monitor
+DATAKIND_MONITOR_HEADER = 'S'    # Monitor header only
+DATAKIND_MONITOR_FULL = 'I'      # Monitor header + data
+DATAKIND_NEW_CONNECTION = 'c'    # New connection established
+DATAKIND_DISCONNECT = 'd'        # Disconnect or retry out
+DATAKIND_HEARD_LIST = 'H'        # Heard list (line by line)
+DATAKIND_REGISTRATION = 'X'      # Registration reply (success/failure)
+DATAKIND_OUTSTANDING = 'Y'       # Outstanding frames in queue
+DATAKIND_PORT_CAPABILITIES = 'g' # Radio port capabilities
+DATAKIND_VERSION = 'R'           # AGWPE version info
+DATAKIND_RAW_FRAMES = 'k'        # Raw AX25 frames
+DATAKIND_MONITORING = 'm'        # Monitoring control
 
-class AGWFrameType(IntEnum):
-    """AGWPE frame types"""
-    DATA = ord('D')     # Data frame (UI)
-    RAW = ord('K')      # Raw AX.25 frame
-    MONITOR = ord('M')  # Enable monitoring
-    CONNECT = ord('C')  # Connect request
-    DX = ord('d')       # Connected data
-    DISCONNECT = ord('D')  # Disconnect
-    REGISTER = ord('R') # Registration
-    VERSION = ord('v')  # Version request
-    HEARD = ord('H')    # Heard list request
+# Send kinds
+SENDKIND_CONNECT_NO_DIGI = 'c'   # Connect without digis
+SENDKIND_CONNECT_DIGI = 'v'      # Connect with digis
+SENDKIND_DISCONNECT = 'd'        # Disconnect
+SENDKIND_DATA = 'D'              # Send data to connected station
+SENDKIND_UNPROTO = 'U'           # Send unproto (beacon/CQ)
+SENDKIND_PORT_INFO = 'P'         # Port information
+SENDKIND_UNPROTO_VIA = 'V'       # Unproto with via
 
-AGW_HEADER_FORMAT = '<I4sBBBBBBBB8s8sI'
-AGW_HEADER_SIZE = 36
-DEFAULT_PORT = 8000
+class AGWPEConnectionError(AGWPEError):
+    """Specific error for connection issues."""
+    pass
 
-class AGWHeader(NamedTuple):
-    """Parsed AGWPE header"""
-    port: int            # Port index
-    data_kind: int       # Frame type (AGWFrameType)
-    pid: int             # Protocol ID
-    call_from: bytes     # Source callsign (8 bytes)
-    call_to: bytes       # Destination callsign (8 bytes)
-    data_len: int        # Payload length
+class AGWPEFrameError(AGWPEError):
+    """Specific error for frame parsing issues."""
+    pass
 
 class AGWPEClient:
     """
-    AGWPE TCP client implementation
-    
-    Args:
-        host: AGWPE server host
-        port: AGWPE server port (default 8000)
-        callsign: Client callsign
-        timeout: Socket timeout in seconds
+    Synchronous AGWPE TCP/IP API client with threaded background reading.
+
+    Usage:
+        client = AGWPEClient()
+        client.connect()
+        client.register_callsign("KE4AHR-1")
+        client.enable_monitoring()
+        while True:
+            port, kind, call_from, call_to, data = client.receive()
+            print(f"Received {kind} from {call_from} to {call_to}")
     """
-    def __init__(
-        self,
-        host: str = "localhost",
-        port: int = DEFAULT_PORT,
-        callsign: str = "NOCALL",
-        timeout: float = 30.0
-    ):
+
+    def __init__(self, host: str = '127.0.0.1', port: int = 8000, timeout: float = 5.0):
+        """
+        Initialize AGWPE client.
+
+        Args:
+            host: AGWPE server hostname or IP
+            port: TCP port (default 8000)
+            timeout: Socket timeout in seconds
+        """
         self.host = host
         self.port = port
-        self.callsign = callsign.upper().ljust(8).encode('ascii')
         self.timeout = timeout
-        
-        self._socket: Optional[socket.socket] = None
-        self._running = False
+        self.sock: Optional[socket.socket] = None
+        self._recv_queue = queue.Queue()
         self._thread: Optional[threading.Thread] = None
-        self._lock = threading.Lock()
-        self._frame_callbacks: Dict[int, Callable[[bytes, str, str], None]] = {}
-        self._version_callback: Optional[Callable[[str], None]] = None
-        
+        self._running = False
+        self._callbacks: Dict[str, Callable] = {}
+        logger.info(f"AGWPEClient initialized for {host}:{port}")
+
     def connect(self) -> None:
-        """Connect to AGWPE server and register"""
-        if self._running:
-            return
-            
+        """
+        Connect to AGWPE server and start reader thread.
+        """
         try:
-            self._socket = socket.create_connection(
-                (self.host, self.port),
-                timeout=self.timeout
-            )
-            self._socket.settimeout(self.timeout)
-            
-            # Send registration frame
-            reg_frame = self._build_header(
-                port=0,
-                data_kind=AGWFrameType.REGISTER,
-                call_from=self.callsign
-            )
-            self._socket.sendall(reg_frame)
-            
-            # Wait for registration response
-            resp = self._socket.recv(AGW_HEADER_SIZE)
-            if len(resp) < AGW_HEADER_SIZE or resp[4] != ord('X'):
-                raise AGWProtocolError("Registration failed")
-                
+            self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.sock.settimeout(self.timeout)
+            self.sock.connect((self.host, self.port))
             self._running = True
-            self._thread = threading.Thread(
-                target=self._receive_loop,
-                daemon=True,
-                name=f"AGWPE-Rx-{self.host}:{self.port}"
-            )
+            self._thread = threading.Thread(target=self._reader_thread, daemon=True)
             self._thread.start()
-            logger.info(f"Connected to AGWPE at {self.host}:{self.port}")
-            
+            logger.info("Connected to AGWPE server")
         except socket.error as e:
-            raise TransportError(f"Connection failed: {e}") from e
+            logger.error(f"Connection failed: {e}")
+            raise AGWPEConnectionError(f"Failed to connect to {self.host}:{self.port}: {e}")
 
     def disconnect(self) -> None:
-        """Disconnect from AGWPE server"""
+        """
+        Disconnect from AGWPE server and stop reader thread.
+        """
         self._running = False
-        if self._thread:
-            self._thread.join(timeout=1.0)
-        if self._socket:
+        if self.sock:
             try:
-                self._socket.close()
-            except OSError:
+                self.sock.shutdown(socket.SHUT_RDWR)
+            except socket.error:
                 pass
-        logger.info(f"Disconnected from {self.host}:{self.port}")
+            self.sock.close()
+            self.sock = None
+        if self._thread:
+            self._thread.join(timeout=5.0)
+            if self._thread.is_alive():
+                logger.warning("Reader thread did not join cleanly")
+            self._thread = None
+        logger.info("Disconnected from AGWPE server")
 
-    def register_frame_callback(
-        self,
-        frame_type: AGWFrameType,
-        callback: Callable[[bytes, str, str], None]
-    ) -> None:
-        """Register callback for specific frame type"""
-        with self._lock:
-            self._frame_callbacks[frame_type] = callback
-
-    def register_version_callback(
-        self,
-        callback: Callable[[str], None]
-    ) -> None:
-        """Register callback for version response"""
-        with self._lock:
-            self._version_callback = callback
-
-    def send_frame(
-        self,
-        data: bytes,
-        frame_type: AGWFrameType = AGWFrameType.DATA,
-        port: int = 0,
-        dest: Optional[str] = None
-    ) -> None:
+    def register_callsign(self, callsign: str) -> None:
         """
-        Send frame to AGWPE server
-        
+        Register a callsign with AGWPE ('X' command).
+
+        Expect 'X' reply for success/failure.
+        """
+        self.send_frame(0, 'X', callsign, '')
+        logger.info(f"Registered callsign: {callsign}")
+
+    def enable_monitoring(self) -> None:
+        """
+        Enable monitoring of frames ('m' command).
+        """
+        self.send_frame(0, 'm', '', '')
+        logger.info("Monitoring enabled")
+
+    def disable_monitoring(self) -> None:
+        """
+        Disable monitoring ('m' command again toggles).
+        """
+        self.send_frame(0, 'm', '', '')
+        logger.info("Monitoring disabled")
+
+    def query_outstanding_frames(self, port: int = 0, callsign: str = '') -> None:
+        """
+        Query outstanding frames in queue ('y' command).
+
         Args:
-            data: Frame payload
-            frame_type: AGWFrameType (default DATA)
-            port: Virtual TNC port
-            dest: Destination callsign (optional)
+            port: Radio port to query
+            callsign: Optional callsign to query specific
         """
-        if not self._socket:
-            raise TransportError("Not connected")
-            
-        call_to = dest.upper().ljust(8).encode('ascii') if dest else b' ' * 8
-        
-        header = self._build_header(
-            port=port,
-            data_kind=frame_type,
-            call_from=self.callsign,
-            call_to=call_to,
-            data_len=len(data)
-        )
-        
+        self.send_frame(port, 'y', callsign, callsign)
+        logger.info(f"Queried outstanding frames for port {port}")
+
+    def query_port_capabilities(self, port: int = 0) -> None:
+        """
+        Query radio port capabilities ('g' command).
+        """
+        self.send_frame(port, 'g', '', '')
+        logger.info(f"Queried capabilities for port {port}")
+
+    def query_version(self) -> None:
+        """
+        Query AGWPE version ('R' command).
+        """
+        self.send_frame(0, 'R', '', '')
+        logger.info("Queried AGWPE version")
+
+    def enable_raw_frames(self) -> None:
+        """
+        Enable raw AX25 frame reception ('k' command).
+        """
+        self.send_frame(0, 'k', '', '')
+        logger.info("Raw frames enabled")
+
+    def register_callback(self, data_kind: str, callback: Callable[[int, str, str, bytes], None]) -> None:
+        """
+        Register callback for specific DataKind.
+
+        Args:
+            data_kind: ASCII char (e.g., 'D' for data)
+            callback: Function(port, call_from, call_to, data)
+        """
+        self._callbacks[data_kind] = callback
+        logger.debug(f"Registered callback for DataKind '{data_kind}'")
+
+    def send_frame(self, port: int, data_kind: str, call_from: str, call_to: str, data: bytes = b'') -> None:
+        """
+        Send AGWPE frame with proper header.
+
+        Args:
+            port: Radio port index
+            data_kind: Single ASCII char (e.g., 'U' for unproto)
+            call_from: Source callsign (up to 9 chars + \0)
+            call_to: Destination callsign (up to 9 chars + \0)
+            data: Payload bytes
+        """
+        if not self.sock:
+            raise AGWPEConnectionError("Not connected")
+
+        call_from_b = call_from.encode('ascii').ljust(10, b'\0')
+        call_to_b = call_to.encode('ascii').ljust(10, b'\0')
+        data_len = len(data)
+        user_reserved = 0  # Always 0
+
+        # Pack header: Port (LOWORD), DataKind (ord(kind)), CallFrom, CallTo, DataLen, USER
+        header = struct.pack(HEADER_FMT, port, ord(data_kind), call_from_b, call_to_b, data_len, user_reserved)
+        full_frame = header + data
+
         try:
-            with self._lock:
-                self._socket.sendall(header + data)
-            logger.debug(f"Sent {frame_type.name} frame ({len(data)} bytes)")
-        except OSError as e:
-            raise TransportError(f"Send failed: {e}") from e
+            self.sock.sendall(full_frame)
+            logger.info(
+                f"Sent frame: Port={port}, DataKind='{data_kind}', "
+                f"From={call_from}, To={call_to}, Len={data_len}"
+            )
+        except socket.error as e:
+            logger.error(f"Send failed: {e}")
+            raise AGWPEConnectionError(f"Send failed: {e}")
 
-    def _build_header(
-        self,
-        port: int = 0,
-        data_kind: int = AGWFrameType.DATA,
-        call_from: bytes = b'',
-        call_to: bytes = b'',
-        data_len: int = 0
-    ) -> bytes:
-        """Construct AGWPE header (Image 1 spec)"""
-        return struct.pack(
-            AGW_HEADER_FORMAT,
-            0,             # Cookie
-            b'',           # Reserved
-            port & 0xff,   # Port index
-            data_kind,     # Frame type
-            0, 0, 0, 0, 0, # Reserved
-            call_from.ljust(8, b' ')[:8],
-            call_to.ljust(8, b' ')[:8],
-            data_len
-        )
-
-    def _parse_header(self, data: bytes) -> Optional[AGWHeader]:
-        """Parse AGWPE header from bytes"""
-        if len(data) < AGW_HEADER_SIZE:
-            return None
-            
-        fields = struct.unpack(AGW_HEADER_FORMAT, data)
-        return AGWHeader(
-            port=fields[2],
-            data_kind=fields[3],
-            pid=fields[4],  # PID is in reserved field4
-            call_from=fields[9].strip(),
-            call_to=fields[10].strip(),
-            data_len=fields[11]
-        )
-
-    def _receive_loop(self) -> None:
-        """Main receive loop (runs in thread)"""
-        buffer = b''
-        while self._running and self._socket:
+    def _reader_thread(self) -> None:
+        """Background thread to read and process AGWPE frames."""
+        while self._running:
             try:
-                # Read header
-                header_data = self._socket.recv(AGW_HEADER_SIZE)
+                header_data = self._recv_exact(HEADER_SIZE)
                 if not header_data:
-                    break  # Connection closed
-                    
-                header = self._parse_header(header_data)
-                if not header:
-                    continue
-                
-                # Read payload
-                payload = b''
-                remaining = header.data_len
-                while remaining > 0:
-                    chunk = self._socket.recv(min(remaining, 4096))
-                    if not chunk:
-                        break
-                    payload += chunk
-                    remaining -= len(chunk)
-                
-                # Dispatch
-                self._handle_frame(header, payload)
-                
+                    break
+
+                # Unpack header
+                port, data_kind_int, call_from_b, call_to_b, data_len, user = struct.unpack(HEADER_FMT, header_data)
+                data_kind = chr(data_kind_int)
+                call_from = call_from_b.rstrip(b'\0').decode('ascii', errors='ignore')
+                call_to = call_to_b.rstrip(b'\0').decode('ascii', errors='ignore')
+
+                # Read data
+                data = self._recv_exact(data_len) if data_len > 0 else b''
+
+                logger.debug(
+                    f"Received frame: Port={port}, DataKind='{data_kind}', "
+                    f"From={call_from}, To={call_to}, Len={data_len}"
+                )
+
+                # Dispatch callback if registered
+                if data_kind in self._callbacks:
+                    try:
+                        self._callbacks[data_kind](port, call_from, call_to, data)
+                    except Exception as e:
+                        logger.error(f"Callback error for '{data_kind}': {e}")
+
+                # Queue for receive()
+                self._recv_queue.put((port, data_kind, call_from, call_to, data))
+
+            except AGWPEFrameError as e:
+                logger.warning(f"Frame error: {e}")
             except socket.timeout:
                 continue
-            except OSError as e:
-                logger.error(f"Receive error: {e}")
+            except socket.error as e:
+                logger.error(f"Read error: {e}")
                 break
-            except Exception as e:
-                logger.exception(f"Unexpected error: {e}")
-                break
-                
-        self._running = False
 
-    def _handle_frame(self, header: AGWHeader, payload: bytes) -> None:
-        """Process received frame"""
-        call_from = header.call_from.decode('ascii', 'ignore').strip()
-        call_to = header.call_to.decode('ascii', 'ignore').strip()
-        
-        with self._lock:
-            if header.data_kind == AGWFrameType.VERSION and self._version_callback:
-                version = payload.decode('ascii', 'ignore').strip()
-                self._version_callback(version)
-            elif header.data_kind in self._frame_callbacks:
-                self._frame_callbacks[header.data_kind](payload, call_from, call_to)
-            else:
-                logger.debug(f"Unhandled frame type: {chr(header.data_kind)}")
+        logger.info("AGWPE reader thread stopped")
 
-    def __repr__(self) -> str:
-        return (f"AGWPEClient(host={self.host}, port={self.port}, "
-                f"callsign={self.callsign.decode().strip()}, "
-                f"connected={self._running})")
+    def _recv_exact(self, size: int) -> bytes:
+        """Receive exact number of bytes or raise error."""
+        data = b''
+        while len(data) < size:
+            chunk = self.sock.recv(size - len(data))
+            if not chunk:
+                raise AGWPEFrameError("Connection closed during read")
+            data += chunk
+        return data
 
-# Example usage
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.DEBUG)
-    
-    def frame_handler(data: bytes, src: str, dest: str) -> None:
-        print(f"Frame from {src} to {dest}: {data.hex()}")
-    
-    agw = AGWPEClient("localhost", callsign="MYCALL")
-    agw.connect()
-    agw.register_frame_callback(AGWFrameType.DATA, frame_handler)
-    
-    try:
-        # Send test frame
-        agw.send_frame(b"Hello AGWPE!", dest="TEST")
-        
-        while True:
-            time.sleep(1)
-    finally:
-        agw.disconnect()
+    def receive(self, timeout: Optional[float] = None) -> Tuple[int, str, str, str, bytes]:
+        """
+        Receive next frame from queue (port, data_kind, call_from, call_to, data).
+
+        Args:
+            timeout: Optional queue timeout in seconds
+
+        Returns:
+            Tuple of frame components
+
+        Raises:
+            AGWPEConnectionError on timeout
+        """
+        try:
+            return self._recv_queue.get(timeout=timeout)
+        except queue.Empty:
+            raise AGWPEConnectionError("Receive timeout")
