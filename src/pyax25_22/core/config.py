@@ -153,5 +153,6 @@ CONFIG_PACSAT_BROADCAST = AX25Config(
     max_frame=256,
     window_size=1,  # Unconnected UI frames
     t1_timeout=10.0,  # No retransmission; was 0.0, causes errors on import.
-    retry_count=0,
+    retry_count=1,    # was set to zero. I get it but this is nuts.
+    tx_delay=0.3,   # gonna add this here so it stops complaining abt PACSAT.
 )

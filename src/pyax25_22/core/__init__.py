@@ -48,7 +48,7 @@ from .exceptions import (
 )
 
 # Version
-__version__ = "0.1.2"
+__version__ = "0.5.0"
 
 # Public API list – explicitly exported symbols
 __all__ = [
