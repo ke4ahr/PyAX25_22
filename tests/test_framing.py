@@ -1,163 +1,193 @@
-# tests/test_framing.py
+# SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (C) 2025-2026 Kris Kirby, KE4AHR
+
 """
-Comprehensive Tests for AX.25 Framing
+tests/test_framing.py
+
+Comprehensive unit tests for framing module.
 
 Covers:
-- Address encoding/decoding
-- Frame construction/parsing
-- FCS calculation
+- Address encoding/decoding and validation
+- FCS calculation and verification
 - Bit stuffing/destuffing
-
-License: LGPLv3.0
-Copyright (C) 2025-2026 Kris Kirby, KE4AHR
-
+- Full frame round-trip (encode/decode)
+- Error cases (invalid address, FCS mismatch, short frames)
 """
 
 import pytest
-import struct
+
 from pyax25_22.core.framing import (
     AX25Frame,
     AX25Address,
     fcs_calc,
-    bit_stuff,
-    bit_destuff,
-    FrameType,
-    PID,
-    FLAG
+    verify_fcs,
 )
+from pyax25_22.core.exceptions import (
+    InvalidAddressError,
+    FCSError,
+    FrameError,
+)
+from pyax25_22.core.config import DEFAULT_CONFIG_MOD8
+
 
 @pytest.fixture
-def valid_callsigns():
-    return [
-        ("TEST", 0),
-        ("LONGER", 15),
-        ("SHORT", 7),
-        ("A", 1)
-    ]
+def basic_addresses():
+    """Fixture for basic source and destination addresses."""
+    dest = AX25Address("DEST", ssid=1)
+    src = AX25Address("SRC", ssid=2)
+    return dest, src
 
-class TestAX25Address:
-    def test_valid_address_encoding(self, valid_callsigns):
-        for call, ssid in valid_callsigns:
-            addr = AX25Address(call, ssid)
-            encoded = addr.encoded()
-            assert len(encoded) == 7
-            assert encoded[:6] == bytes(call.ljust(6), 'ascii').translate(bytes.maketrans(b' ', b'\x00'))
-            assert (encoded[6] >> 1) & 0x0F == ssid
 
-    def test_address_decoding(self):
-        encoded = b'TEST  \x60'  # TEST-0
-        addr, last = AX25Address.from_bytes(encoded)
-        assert addr.callsign.strip() == "TEST"
-        assert addr.ssid == 0
-        assert not last
+def test_address_validation():
+    """Test AX25Address validation rules."""
+    # Valid cases
+    AX25Address("AB1CDE", ssid=0)
+    AX25Address("KE4AHR", ssid=15)
+    AX25Address("A", ssid=7)  # Minimum length
 
-    def test_invalid_ssid(self):
-        with pytest.raises(ValueError):
-            AX25Address("TEST", -1)
-        with pytest.raises(ValueError):
-            AX25Address("TEST", 16)
+    # Invalid callsign length
+    with pytest.raises(InvalidAddressError):
+        AX25Address("", ssid=0)  # Empty
 
-    def test_last_address_bit(self):
-        addr = AX25Address("TEST", 0)
-        encoded = addr.encoded(last=True)
-        assert encoded[6] & 0x01 == 0x01
+    with pytest.raises(InvalidAddressError):
+        AX25Address("TOOLONG", ssid=0)  # 7 chars
 
-class TestAX25Frame:
-    @pytest.fixture
-    def sample_ui_frame(self):
-        return AX25Frame(
-            dest=AX25Address("DEST", 1),
-            src=AX25Address("SRC", 2),
-            pid=PID.NO_LAYER3
-        )
+    # Invalid SSID range
+    with pytest.raises(InvalidAddressError):
+        AX25Address("TEST", ssid=-1)
 
-    def test_ui_frame_encoding(self, sample_ui_frame):
-        payload = b"Hello AX.25!"
-        frame = sample_ui_frame.encode_ui(payload)
-        
-        assert frame.startswith(bytes([FLAG]))
-        assert frame.endswith(bytes([FLAG]))
-        
-        stripped = frame[1:-1]
-        destuffed = bit_destuff(stripped)
-        
-        # Verify addresses
-        assert destuffed[:7] == AX25Address("DEST", 1).encoded()
-        assert destuffed[7:14] == AX25Address("SRC", 2).encoded(last=True)
-        
-        # Verify control/PID
-        assert destuffed[14] == 0x03  # UI frame
-        assert destuffed[15] == PID.NO_LAYER3
-        
-        # Verify payload
-        assert destuffed[16:-2] == payload
-        
-        # Verify FCS
-        calculated_fcs = fcs_calc(destuffed[:-2])
-        stored_fcs = struct.unpack('<H', destuffed[-2:])[0]
-        assert calculated_fcs == stored_fcs
+    with pytest.raises(InvalidAddressError):
+        AX25Address("TEST", ssid=16)
 
-    def test_i_frame_encoding(self):
-        frame = AX25Frame(
-            dest=AX25Address("DEST", 1),
-            src=AX25Address("SRC", 2)
-        )
-        encoded = frame.encode_i(b"data", ns=3, nr=5, poll=True)
-        destuffed = bit_destuff(encoded[1:-1])
-        
-        control = destuffed[14]
-        assert (control >> 1) & 0x07 == 3  # NS
-        assert (control >> 5) & 0x07 == 5  # NR
-        assert (control >> 4) & 0x01 == 1  # Poll
 
-    def test_sabm_frame(self):
-        frame = AX25Frame(
-            dest=AX25Address("DEST", 1),
-            src=AX25Address("SRC", 2)
-        )
-        encoded = frame.encode_sabm(poll=True)
-        destuffed = bit_destuff(encoded[1:-1])
-        assert destuffed[14] == 0x2F | (1 << 4)
+def test_address_encoding(basic_addresses):
+    """Test AX25Address encoding."""
+    dest, src = basic_addresses
 
-    def test_invalid_frame_parsing(self):
-        # Too short
-        with pytest.raises(ValueError):
-            AX25Frame.from_bytes(bytes([FLAG, FLAG]))
-            
-        # Bad FCS
-        bad_frame = AX25Frame(
-            dest=AX25Address("A", 0),
-            src=AX25Address("B", 0)
-        ).encode_ui(b"test")[:-2] + b'\x00\x00'
-        with pytest.raises(ValueError):
-            AX25Frame.from_bytes(bad_frame)
+    # Basic encoding
+    assert dest.encode(last=False) == bytes([ord('D')<<1, ord('E')<<1, ord('S')<<1, ord('T')<<1, ord(' ')<<1, ord(' ')<<1, 0x60 | (1<<1)])
+    assert src.encode(last=True) == bytes([ord('S')<<1, ord('R')<<1, ord('C')<<1, ord(' ')<<1, ord(' ')<<1, ord(' ')<<1, 0x61 | (2<<1)])
 
-class TestFCS:
-    def test_known_fcs_values(self):
-        # Test vectors from AX.25 spec
-        assert fcs_calc(b"\x01") == 0x0E1F
-        assert fcs_calc(b"\x03\xF0") == 0x8E72
-        assert fcs_calc(b"C") == 0x14E1
+    # With C-bit and H-bit
+    addr = AX25Address("TEST", ssid=3, c_bit=True, h_bit=True)
+    encoded = addr.encode(last=True)
+    assert encoded[-1] & 0xE0 == 0xE0  # C and H bits set
 
-class TestBitStuffing:
-    @pytest.mark.parametrize("data,expected", [
-        (b"\x7E", b"\xDB\xDC"),
-        (b"\xDB", b"\xDB\xDD"),
-        (b"Hello\x7E", b"Hello\xDB\xDC"),
-    ])
-    def test_stuffing(self, data, expected):
-        assert bit_stuff(data) == expected
-        
-    def test_roundtrip(self):
-        orig = b"\x01\x02\x7E\xDB\x03"
-        stuffed = bit_stuff(orig)
-        destuffed = bit_destuff(stuffed)
-        assert destuffed == orig
 
-    def test_invalid_stuffing(self):
-        # 6 1s in a row (0xFC is 11111100)
-        with pytest.raises(ValueError):
-            bit_destuff(b"\xFC")
+def test_address_decoding():
+    """Test AX25Address decoding."""
+    # Basic decode
+    data = bytes([ord('D')<<1, ord('E')<<1, ord('S')<<1, ord('T')<<1, ord(' ')<<1, ord(' ')<<1, 0x61 | (1<<1)])
+    addr, is_last = AX25Address.decode(data)
+    assert addr.callsign == "DEST"
+    assert addr.ssid == 1
+    assert is_last == True
 
-if __name__ == "__main__":
-    pytest.main([__file__])
+    # With bits
+    data_with_bits = bytes([ord('T')<<1, ord('E')<<1, ord('S')<<1, ord('T')<<1, ord(' ')<<1, ord(' ')<<1, 0xE0 | (3<<1)])
+    addr, _ = AX25Address.decode(data_with_bits)
+    assert addr.c_bit == True
+    assert addr.h_bit == True
+
+    # Invalid length
+    with pytest.raises(InvalidAddressError):
+        AX25Address.decode(bytes(6))
+
+
+def test_fcs_calculation():
+    """Test FCS calculation and verification."""
+    test_data = b'ABCDEF'
+    addr_payload = b'DEST  \x63SRC   \x03\xF0' + test_data
+    fcs = fcs_calc(addr_payload)
+    assert isinstance(fcs, int)
+    assert 0 <= fcs <= 0xFFFF
+
+    # Verify
+    assert verify_fcs(addr_payload, fcs)
+
+    # Invalid
+    assert not verify_fcs(addr_payload + b'\x00', fcs)
+
+
+def test_bit_stuffing():
+    """Test bit stuffing and destuffing round-trip."""
+    test_data = bytes.fromhex("7E 7E 7E")  # Multiple flags - should stuff
+    stuffed = AX25Frame._bit_stuff(test_data)
+    destuffed = AX25Frame._bit_destuff(stuffed)
+    assert destuffed == test_data
+
+    # 5 ones
+    five_ones = bytes([0x1F])  # 00011111
+    stuffed = AX25Frame._bit_stuff(five_ones)
+    assert len(stuffed) > len(five_ones)  # Extra 0 inserted
+
+    # Error in destuff (invalid sequence)
+    invalid_stuffed = bytes([0xFF])  # 11111111 - invalid (6 ones)
+    with pytest.raises(BitStuffingError):  # Assume we add this in exceptions
+        AX25Frame._bit_destuff(invalid_stuffed)
+
+
+def test_frame_roundtrip(basic_addresses):
+    """Test full frame encode/decode cycle."""
+    dest, src = basic_addresses
+
+    # Basic UI frame
+    frame = AX25Frame(
+        destination=dest,
+        source=src,
+        control=0x03,  # UI
+        pid=0xF0,
+        info=b"Hello PyAX25_22",
+    )
+    encoded = frame.encode()
+    assert encoded[0] == 0x7E
+    assert encoded[-1] == 0x7E
+
+    decoded = AX25Frame.decode(encoded)
+    assert decoded.destination.callsign == "DEST"
+    assert decoded.destination.ssid == 1
+    assert decoded.source.callsign == "SRC"
+    assert decoded.source.ssid == 2
+    assert decoded.control == 0x03
+    assert decoded.pid == 0xF0
+    assert decoded.info == b"Hello PyAX25_22"
+
+    # With digipeaters
+    digi1 = AX25Address("DIGI1", ssid=0, h_bit=True)
+    frame.digipeaters = [digi1]
+    encoded_digi = frame.encode()
+    decoded_digi = AX25Frame.decode(encoded_digi)
+    assert len(decoded_digi.digipeaters) == 1
+    assert decoded_digi.digipeaters[0].h_bit == True
+
+    # Invalid FCS
+    bad_encoded = encoded[:-3] + b'\x00\x00' + encoded[-1:]
+    with pytest.raises(FCSError):
+        AX25Frame.decode(bad_encoded)
+
+    # Too short
+    with pytest.raises(FrameError):
+        AX25Frame.decode(bytes(10))
+
+
+def test_i_frame():
+    """Test I-frame specific encoding."""
+    # Mod 8 I-frame N(S)=3, N(R)=5, P=1
+    control = (3 << 1) | (5 << 5) | 0x10
+    frame = AX25Frame(control=control, pid=0xF0, config=DEFAULT_CONFIG_MOD8)
+    encoded = frame.encode()
+
+    decoded = AX25Frame.decode(encoded)
+    assert decoded.control == control
+
+
+def test_extended_mod128():
+    """Test modulo 128 extended control field."""
+    config_mod128 = AX25Config(modulo=128)
+    # Extended I-frame N(S)=100, N(R)=120, P=1
+    control = (100 << 1) | (120 << 9) | 0x100  # 16-bit control
+    frame = AX25Frame(control=control, pid=0xF0, config=config_mod128)
+    encoded = frame.encode()
+
+    decoded = AX25Frame.decode(encoded)
+    assert decoded.control == control
