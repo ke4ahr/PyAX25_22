@@ -16,9 +16,9 @@ Covers:
 
 import pytest
 
-from pyax25_22.core.statemachine import AX25StateMachine, AX25State
-from pyax25_22.core.exceptions import ConnectionStateError
-from pyax25_22.core.config import AX25Config, DEFAULT_CONFIG_MOD8, DEFAULT_CONFIG_MOD128
+from pyax25-22.core.statemachine import AX25StateMachine, AX25State
+from pyax25-22.core.exceptions import ConnectionStateError
+from pyax25-22.core.config import AX25Config, DEFAULT_CONFIG_MOD8, DEFAULT_CONFIG_MOD128
 
 
 @pytest.fixture

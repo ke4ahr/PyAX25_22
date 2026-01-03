@@ -16,7 +16,7 @@ This example shows the minimal usage of the PyAX25_22 core framing module to:
 Run this script directly to see the output.
 """
 
-from pyax25_22.core.framing import AX25Frame, AX25Address
+from pyax25-22.core.framing import AX25Frame, AX25Address
 
 def main() -> None:
     """

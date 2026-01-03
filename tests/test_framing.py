@@ -16,18 +16,18 @@ Covers:
 
 import pytest
 
-from pyax25_22.core.framing import (
+from pyax25-22.core.framing import (
     AX25Frame,
     AX25Address,
     fcs_calc,
     verify_fcs,
 )
-from pyax25_22.core.exceptions import (
+from pyax25-22.core.exceptions import (
     InvalidAddressError,
     FCSError,
     FrameError,
 )
-from pyax25_22.core.config import DEFAULT_CONFIG_MOD8
+from pyax25-22.core.config import DEFAULT_CONFIG_MOD8
 
 
 @pytest.fixture

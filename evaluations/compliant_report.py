@@ -29,7 +29,7 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
 # Test and coverage configuration
-TEST_ARGS = ["-q", "--cov=pyax25_22", "--cov-report=term-missing"]
+TEST_ARGS = ["-q", "--cov=pyax25-22", "--cov-report=term-missing"]
 MIN_COVERAGE = 95.0  # Minimum acceptable coverage percentage
 
 

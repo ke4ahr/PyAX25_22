@@ -18,11 +18,11 @@ Covers:
 
 import pytest
 
-from pyax25_22.core.flow_control import AX25FlowControl
-from pyax25_22.core.statemachine import AX25StateMachine
-from pyax25_22.core.framing import AX25Frame
-from pyax25_22.core.exceptions import FrameError
-from pyax25_22.core.config import AX25Config, DEFAULT_CONFIG_MOD8
+from pyax25-22.core.flow_control import AX25FlowControl
+from pyax25-22.core.statemachine import AX25StateMachine
+from pyax25-22.core.framing import AX25Frame
+from pyax25-22.core.exceptions import FrameError
+from pyax25-22.core.config import AX25Config, DEFAULT_CONFIG_MOD8
 
 
 @pytest.fixture

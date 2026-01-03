@@ -2,7 +2,7 @@
 # Copyright (C) 2025-2026 Kris Kirby, KE4AHR
 
 """
-pyax25_22.interfaces.__init__.py
+pyax25-22.interfaces.__init__.py
 
 Public API for the transport interface layer.
 
@@ -10,7 +10,7 @@ This module exports the concrete interface classes and the abstract base
 class used throughout the library.
 
 Applications should import transport implementations from this namespace:
-    from pyax25_22.interfaces import KISSInterface, AGWPEInterface
+    from pyax25-22.interfaces import KISSInterface, AGWPEInterface
 
 Higher-level libraries (PyXKISS, PyAGW3) will re-export these for convenience.
 """
@@ -42,4 +42,4 @@ if __name__ == "__main__":
     print("  - KISSInterface: Serial/TCP KISS with multi-drop support")
     print("  - AGWPEInterface: Full TCP/IP AGWPE client")
     print("Import example:")
-    print("    from pyax25_22.interfaces import KISSInterface")
+    print("    from pyax25-22.interfaces import KISSInterface")

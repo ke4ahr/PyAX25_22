@@ -1,0 +1,66 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyax25-22"
+version = "0.1.0"
+description = "Pure Python implementation of AX.25 v2.2 Layer 2 protocol for amateur radio"
+readme = "README.md"
+authors = [{ name = "Kris Kirby, KE4AHR" }]
+license = { text = "LGPL-3.0-or-later" }
+requires-python = ">=3.8"
+keywords = [
+    "ax25",
+    "packet-radio",
+    "amateur-radio",
+    "ham-radio",
+    "kiss",
+    "agwpe",
+    "tnc",
+    "pacsat",
+    "aprs",
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: GNU Lesser General Public License v3 or later (LGPLv3+)",
+    "Operating System :: OS Independent",
+    "Topic :: Communications :: Ham Radio",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Intended Audience :: Developers",
+    "Development Status :: 4 - Beta",
+]
+
+dependencies = [
+    "pyserial>=3.5",
+]
+
+[project.optional-dependencies]
+async = ["aiohttp>=3.8"]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "black>=24.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0",
+    "sphinx>=7.0",
+    "sphinx-rtd-theme>=2.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/ke4ahr/PyAX25_22"
+Documentation = "https://github.com/ke4ahr/PyAX25_22/tree/main/docs"
+"Bug Tracker" = "https://github.com/ke4ahr/PyAX25_22/issues"
+"Source Code" = "https://github.com/ke4ahr/PyAX25_22"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["pyax25-22*"]
+
+[tool.setuptools.package-data]
+"pyax25-22" = ["*.py"]
