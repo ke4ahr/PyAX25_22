@@ -5,7 +5,7 @@
 
 **Author:** Kris Kirby, KE4AHR  
 **License:** GNU Lesser General Public License v3 or later (LGPL-3.0-or-later)  
-**Version:** 0.1.0  
+**Version:** 0.1.1  
 **Release Date:** January 02, 2026  
 **Repository:** https://github.com/ke4ahr/PyAX25_22
 
@@ -57,7 +57,7 @@ For development (includes testing and documentation tools):
 
 ### Send a UI Beacon
 
-    from pyax25_22.core.framing import AX25Frame, AX25Address
+    from pyax25-22.core.framing import AX25Frame, AX25Address
 
     dest = AX25Address("APRS", ssid=0)
     src = AX25Address("KE4AHR", ssid=1)
@@ -74,7 +74,7 @@ For development (includes testing and documentation tools):
 
 ### Monitor via Multi-Drop KISS
 
-    from pyax25_22.interfaces.kiss import KISSInterface
+    from pyax25-22.interfaces.kiss import KISSInterface
 
     kiss = KISSInterface("/dev/ttyUSB0", baudrate=9600, tnc_address=1)
 
@@ -93,7 +93,7 @@ For development (includes testing and documentation tools):
 
 ### Monitor via AGWPE
 
-    from pyax25_22.interfaces.agwpe import AGWPEInterface
+    from pyax25-22.interfaces.agwpe import AGWPEInterface
 
     agwpe = AGWPEInterface()
 
