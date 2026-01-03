@@ -60,6 +60,3 @@ Documentation = "https://github.com/ke4ahr/PyAX25_22/tree/main/docs"
 
 [tool.setuptools.packages.find]
 where = ["src"]
-
-[tool.setuptools.package-data]
-"pyax25_22" = ["*.py"]
