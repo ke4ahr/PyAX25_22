@@ -5,7 +5,7 @@ PyAX25_22 Utilities Module
 Provides common utilities for thread safety, async operations, and other shared functionality.
 
 License: LGPLv3.0
-Copyright (C) 2024 Kris Kirby, KE4AHR
+Copyright (C) 2025-2026 Kris Kirby, KE4AHR
 """
 
 from .threadsafe import SharedState, AtomicCounter

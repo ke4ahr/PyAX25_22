@@ -1,4 +1,7 @@
 # pyax25_22/utils/threadsafe.py
+# License: LGPLv3.0
+# Copyright (C) 2025-2026 Kris Kirby, KE4AHR
+
 """
 Thread-safe Data Structures
 
@@ -6,8 +9,6 @@ Provides:
 - AtomicCounter: Thread-safe integer counter
 - SharedState: Thread-safe key-value store
 
-License: LGPLv3.0
-Copyright (C) 2024 Kris Kirby, KE4AHR
 """
 
 import threading

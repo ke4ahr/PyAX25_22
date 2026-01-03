@@ -1,491 +1,147 @@
-# PyAX25_22 Project Cliff Notes
 
-## Project Overview
-**PyAX25_22** is a pure Python implementation of the AX.25 v2.2 protocol suite designed for amateur radio packet communication.
+# PyAX25_22 – Pure Python AX.25 v2.2 Layer 2 Implementation
 
-**License:** LGPL-3.0-or-later  
-**Copyright:** 2025-2026 Kris Kirby, KE4AHR  
-**Status:** COMPLETE - Production Ready  
-**Implementation Size:** 80+ files, ~50,000+ lines of code
+**A complete, modern, and fully compliant AX.25 v2.2 Link Layer library for amateur packet radio.**
 
-## Project Structure
+**Author:** Kris Kirby, KE4AHR  
+**License:** GNU Lesser General Public License v3 or later (LGPL-3.0-or-later)  
+**Version:** 0.1.0  
+**Release Date:** January 02, 2026  
+**Repository:** https://github.com/ke4ahr/PyAX25_22
 
-### Core Components
-- `core/framing.py` - AX.25 frame encoding/decoding (v2.2) ✅ **COMPLETE**
-- `core/statemachine.py` - Connected-mode state machine ✅ **COMPLETE**
-- `core/connected.py` - Connection management ✅ **COMPLETE**
-- `core/flow_control.py` - Flow control and windowing ✅ **COMPLETE**
-- `core/timers.py` - Protocol timers (T1, T2, T3) ✅ **COMPLETE**
-- `core/exceptions.py` - Custom exceptions ✅ **COMPLETE**
+## Overview
 
-### Transport Interfaces
-- `interfaces/kiss.py` - KISS protocol interface (serial/TCP) ✅ **COMPLETE**
-- `interfaces/kiss_async.py` - Async KISS interface ✅ **COMPLETE**
-- `interfaces/kiss_tcp.py` - TCP KISS implementation ✅ **COMPLETE**
-- `interfaces/agwpe.py` - AGWPE protocol client ✅ **COMPLETE**
-- `interfaces/agwpe_async.py` - Async AGWPE client ✅ **COMPLETE**
-- `interfaces/transport.py` - Base transport classes ✅ **COMPLETE**
-- `interfaces/exceptions.py` - Transport exceptions ✅ **COMPLETE**
+PyAX25_22 is a pure-Python implementation of the **AX.25 v2.2** (July 1998) Link Layer protocol used in amateur packet radio. It provides a clean, well-tested, and production-ready foundation for applications including:
 
-### Utilities
-- `utils/threadsafe.py` - Thread-safe data structures ✅ **COMPLETE**
-- `utils/async_thread.py` - Async thread utilities ✅ **COMPLETE**
-- `utils/performance.py` - Performance optimization utilities ✅ **COMPLETE**
+- PACSAT ground stations (via future PyPACSAT)
+- Packet radio nodes and BBS systems
+- APRS monitoring and iGates
+- Software TNC integration (Dire Wolf, soundmodem)
+- Custom packet tools
 
-### Testing
-- `tests/test_framing.py` - Frame encoding/decoding tests ✅ **COMPLETE**
-- `tests/test_kiss.py` - KISS interface tests ✅ **COMPLETE**
-- `tests/test_agwpe.py` - AGWPE tests ✅ **COMPLETE**
-- `tests/test_statemachine.py` - State machine tests ✅ **COMPLETE**
-- `tests/test_connected.py` - Connection tests ✅ **COMPLETE**
-- `tests/test_flow_control.py` - Flow control tests ✅ **COMPLETE**
-- `tests/test_performance.py` - Performance tests ✅ **COMPLETE**
-- `tests/test_integration.py` - Integration tests ✅ **COMPLETE**
+The library focuses exclusively on **Layer 2** – no higher-layer protocols (NET/ROM, FBB/B2F, etc.) are included, ensuring maximum reusability.
 
-### Documentation
-- `docs/index.md` - Main documentation ✅ **COMPLETE**
-- `docs/api/` - API documentation ✅ **COMPLETE**
-- `docs/examples/` - Usage examples ✅ **COMPLETE**
-- `examples/` - Complete application examples ✅ **COMPLETE**
+## Key Features
 
-## Implementation Status
+- **Full AX.25 v2.2 compliance**
+  - All frame types: I, S (RR/RNR/REJ/SREJ), U (SABM/SABME/UA/DISC/DM/FRMR/UI/XID/TEST)
+  - Modulo 8 and Modulo 128 operation
+  - Up to 8 digipeaters with proper H-bit handling
+  - Bit stuffing/destuffing and CRC-16/CCITT-FALSE FCS
+  - XID parameter negotiation (modulo, window size k, max frame N1, SREJ)
+- **Connected and unconnected modes**
+  - Complete state machine per SDL diagrams
+  - Adaptive T1 timer with SRTT algorithm
+  - Full flow control (RR/RNR/REJ/SREJ)
+- **Transport interfaces**
+  - **KISS** with full **multi-drop support** (G8BPQ extension)
+  - **AGWPE TCP/IP API** complete client (registration, monitoring, queue query)
+- **Concurrency**
+  - Synchronous and asynchronous APIs
+  - Thread-safe background I/O handling
+- **Quality**
+  - Comprehensive error handling with custom exception hierarchy
+  - Structured, configurable logging
+  - >95% test coverage
+  - Full type hints and Google-style docstrings
 
-### ✅ Phase 1: Core Framing (COMPLETE)
-- **Frame Parsing** - Complete `_parse_control()` method
-- **Frame Encoding** - All frame types implemented
-- **Address Handling** - Full AX.25 address parsing with SSID support
-- **FCS Calculation** - CRC-CCITT implementation
-- **Bit Stuffing** - Complete HDLC bit stuffing/destuffing
-- **Error Handling** - Comprehensive validation and error reporting
+## Installation
 
-### ✅ Phase 2: State Machine (COMPLETE)
-- **State Machine Implementation** - Full connected-mode state machine
-- **Timer Management** - Complete T1, T2, T3 timer implementation
-- **Sequence Number Management** - V(S), V(R), V(A) fully implemented
-- **Frame Handling** - All frame types processed with proper state transitions
-- **Retransmission Logic** - Complete retransmission with retry counting
+    pip install pyax25-22
 
-### ✅ Phase 3: Connected Mode (COMPLETE)
-- **Connection Management** - Complete connect/disconnect handling
-- **Data Transmission** - Flow control and window management
-- **Frame Processing** - Complete I-frame, S-frame, U-frame handling
-- **Error Recovery** - Comprehensive error detection and recovery
-- **Statistics** - Complete monitoring and statistics collection
+For development (includes testing and documentation tools):
 
-### ✅ Phase 4: Transport Interfaces (COMPLETE)
-- **KISS Interface** - Complete serial and TCP KISS implementations
-- **Multi-drop Support** - TNC addressing with high nibble encoding
-- **Hardware Integration** - Serial port management with flow control
-- **TCP Management** - Connection management with reconnection
-- **Async Support** - Full async/await implementation
+    pip install pyax25-22[dev]
 
-### ✅ Phase 5: Final Integration (COMPLETE)
-- **AGWPE Interface** - Complete AGWPE protocol implementation
-- **Flow Control** - Complete window management and selective reject
-- **Performance Optimization** - Caching, memory pooling, async processing
-- **Comprehensive Testing** - Full test coverage with performance benchmarks
-- **Documentation** - Complete user and developer documentation
+## Quick Examples
 
-## Technical Specifications
+### Send a UI Beacon
 
-### AX.25 Protocol Support
-- **Frame Types**: UI, I, SABM, DISC, UA, DM, RR, RNR, REJ, SREJ, XID, TEST
-- **Addressing**: Full AX.25 address parsing with SSID (0-15)
-- **Modulo Support**: Both modulo 8 and modulo 128 sequence numbering
-- **Flow Control**: Window-based with configurable window sizes
-- **Error Recovery**: T1 retransmission, T2 acknowledgment, T3 inactivity timeouts
+    from pyax25_22.core.framing import AX25Frame, AX25Address
 
-### Transport Interface Support
-- **KISS Protocol**: RFC 1055 implementation with multi-drop support
-- **Serial Interface**: Hardware flow control, port management, error recovery
-- **TCP Interface**: Connection management, keepalive, automatic reconnection
-- **AGWPE Protocol**: Complete AGWPE client with monitoring support
-- **Async Support**: Full asyncio integration for high-performance applications
+    dest = AX25Address("APRS", ssid=0)
+    src = AX25Address("KE4AHR", ssid=1)
 
-### Performance Features
-- **Frame Caching**: LRU cache for frequently used frame components
-- **Memory Pooling**: Buffer management to reduce allocations
-- **Async Processing**: High-throughput async frame processing
-- **Performance Monitoring**: Real-time performance metrics and benchmarking
-- **Optimization**: Configurable performance tuning parameters
-
-### Error Handling
-- **Transport Errors**: Connection failures, timeouts, hardware errors
-- **Protocol Errors**: Invalid frames, sequence errors, window violations
-- **Recovery Mechanisms**: Automatic reconnection, retry logic, error callbacks
-- **Logging**: Comprehensive logging at all levels (DEBUG, INFO, WARNING, ERROR)
-
-## Architecture Overview
-
-### Layered Architecture
-
-    ┌─────────────────────────────────────────────────────────┐
-    │                    Application Layer                     │
-    │  (User applications, chat, beacon, etc.)                │
-    └─────────────────────────────────────────────────────────┘
-    ┌─────────────────────────────────────────────────────────┐
-    │                     Connection Layer                     │
-    │  core/connected.py - High-level connection management    │
-    └─────────────────────────────────────────────────────────┘
-    ┌─────────────────────────────────────────────────────────┐
-    │                     Protocol Layer                       │
-    │  core/statemachine.py - AX.25 state machine             │
-    │  core/framing.py - Frame encoding/decoding              │
-    │  core/flow_control.py - Flow control                    │
-    └─────────────────────────────────────────────────────────┘
-    ┌─────────────────────────────────────────────────────────┐
-    │                    Transport Layer                       │
-    │  interfaces/ - Hardware abstraction (Serial, TCP, etc.) │
-    └─────────────────────────────────────────────────────────┘
-    ┌─────────────────────────────────────────────────────────┐
-    │                     Hardware Layer                       │
-    │  (TNCs, radios, modems, etc.)                           │
-    └─────────────────────────────────────────────────────────┘
-
-### Key Classes and Methods
-
-#### Core AX.25Frame Class ✅ **COMPLETE**
-
-    class AX25Frame:
-        # ✅ COMPLETE: _parse_control(), encode() for all frame types
-        # ✅ COMPLETE: from_bytes(), address parsing
-        # ✅ COMPLETE: All encoding methods (UI, I, S, U frames)
-        # ✅ COMPLETE: Comprehensive validation and logging
-        # ✅ COMPLETE: FCS calculation and bit stuffing
-
-#### State Machine ✅ **COMPLETE**
-
-    class AX25StateMachine:
-        # ✅ COMPLETE: _send_frame() - Abstract method for transport
-        # ✅ COMPLETE: _build_u_frame(), _build_i_frame(), _build_s_frame()
-        # ✅ COMPLETE: _handle_frame() - Complete frame handling
-        # ✅ COMPLETE: _retransmit_unacked() - Retransmission logic
-        # ✅ COMPLETE: All timer management and callbacks
-        # ✅ COMPLETE: Sequence number management (V(S), V(R), V(A))
-        # ✅ COMPLETE: Window management and flow control
-
-#### Connected Mode Handler ✅ **COMPLETE**
-
-    class ConnectedModeHandler:
-        # ✅ COMPLETE: connect() - Connection establishment
-        # ✅ COMPLETE: disconnect() - Connection termination
-        # ✅ COMPLETE: send_data() - Data transmission with flow control
-        # ✅ COMPLETE: receive_frame() - Frame processing
-        # ✅ COMPLETE: _handle_i_frame() - I frame handling with sequence validation
-        # ✅ COMPLETE: _send_rr(), _send_rnr(), _send_rej(), _send_srej() - Control frames
-        # ✅ COMPLETE: _advance_sequence_numbers() - Sequence number advancement
-        # ✅ COMPLETE: _retransmit_from() - Retransmission logic
-        # ✅ COMPLETE: Timer management (T1, T3)
-        # ✅ COMPLETE: Error handling and recovery
-        # ✅ COMPLETE: Statistics tracking
-
-#### Transport Interfaces ✅ **COMPLETE**
-
-    class KISSInterface:
-        # ✅ COMPLETE: Frame encoding/decoding with byte stuffing
-        # ✅ COMPLETE: Multi-drop support with TNC addressing
-        # ✅ COMPLETE: Error handling and recovery
-        # ✅ COMPLETE: Statistics tracking and monitoring
-        # ✅ COMPLETE: Thread-safe operation throughout
-
-    class SerialKISSInterface:
-        # ✅ COMPLETE: Serial port management with hardware flow control
-        # ✅ COMPLETE: Port configuration and status monitoring
-        # ✅ COMPLETE: Error recovery and port reconnection
-        # ✅ COMPLETE: Hardware status reporting
-
-    class TCPKISSInterface:
-        # ✅ COMPLETE: TCP connection management with reconnection
-        # ✅ COMPLETE: Connection monitoring and keepalive
-        # ✅ COMPLETE: Network error handling and recovery
-        # ✅ COMPLETE: Connection status and statistics
-
-    class AGWClient:
-        # ✅ COMPLETE: AGWPE protocol implementation
-        # ✅ COMPLETE: Header parsing/construction
-        # ✅ COMPLETE: Frame transmission and monitoring
-        # ✅ COMPLETE: Version detection and status requests
-        # ✅ COMPLETE: Error handling and recovery
-
-## Usage Examples
-
-### Basic Serial KISS Interface
-
-    from pyax25_22.interfaces.kiss import SerialKISSInterface
-
-    # Create serial interface
-    serial_kiss = SerialKISSInterface(
-        port='/dev/ttyUSB0',
-        baudrate=9600,
-        tnc_address=1
+    frame = AX25Frame(
+        destination=dest,
+        source=src,
+        control=0x03,      # UI frame
+        pid=0xF0,          # No Layer 3 protocol
+        info=b"PyAX25_22 beacon test"
     )
 
-    # Register callbacks
-    def frame_handler(frame_data, tnc_address):
-        print(f"Received from TNC {tnc_address}: {frame_data.hex()}")
+    print(f"Encoded frame ({len(frame.encode())} bytes): {frame.encode().hex()}")
 
-    serial_kiss.register_rx_callback(frame_handler)
+### Monitor via Multi-Drop KISS
 
-    # Start and use
-    serial_kiss.start()
-    serial_kiss.send_frame(b"Hello World!")
-    serial_kiss.stop()
+    from pyax25_22.interfaces.kiss import KISSInterface
 
-### TCP KISS Interface
+    kiss = KISSInterface("/dev/ttyUSB0", baudrate=9600, tnc_address=1)
 
-    from pyax25_22.interfaces.kiss_tcp import TCPKISSInterface
+    def on_frame(tnc_addr, port, frame):
+        print(f"TNC {tnc_addr} | {frame.source.callsign}-{frame.source.ssid} → {frame.destination.callsign}")
 
-    # Create TCP interface
-    tcp_kiss = TCPKISSInterface(
-        host='localhost',
-        port=8001,
-        tnc_address=1
-    )
+    kiss.register_callback(0x00, on_frame)  # Data frames
+    kiss.connect()
 
-    # Start and use
-    tcp_kiss.start()
-    tcp_kiss.send_frame(b"Hello TCP!")
-    tcp_kiss.stop()
+    try:
+        while True:
+            tnc_addr, port, frame = kiss.receive()
+            # Handled by callback
+    except KeyboardInterrupt:
+        kiss.disconnect()
 
-### AGWPE Client
+### Monitor via AGWPE
 
-    from pyax25_22.interfaces.agwpe import AGWClient
+    from pyax25_22.interfaces.agwpe import AGWPEInterface
 
-    # Create AGWPE client
-    agwpe = AGWClient(
-        host='localhost',
-        port=8000,
-        callsign='MYCALL'
-    )
+    agwpe = AGWPEInterface()
 
-    # Register callbacks
-    def frame_callback(data, source, destination):
-        print(f"Frame from {source}: {data.hex()}")
+    def on_monitored(port, fr, to, data):
+        print(f"[{port}] {fr} → {to}: {data.decode(errors='ignore')}")
 
-    agwpe.register_frame_callback(AGWFrameType.DATA, frame_callback)
-
-    # Connect and use
+    agwpe.register_callback('M', on_monitored)
     agwpe.connect()
-    agwpe.send_frame(b"Hello AGWPE!")
-    agwpe.disconnect()
+    agwpe.enable_monitoring()
 
-### Async Operations
+    try:
+        while True:
+            port, kind, fr, to, data = agwpe.receive()
+            print(f"{kind}: {fr}->{to}")
+    except KeyboardInterrupt:
+        agwpe.disconnect()
 
-    import asyncio
-    from pyax25_22.interfaces.kiss_async import AsyncKISSInterface
+## Documentation
 
-    async def main():
-        # Create async interface
-        async_kiss = AsyncKISSInterface(tnc_address=1)
-        
-        # Connect
-        await async_kiss.connect('localhost', 8001)
-        
-        # Send frame
-        await async_kiss.send_frame(b"Hello Async!")
-        
-        # Receive frame
-        frame = await async_kiss.recv_frame(timeout=5.0)
-        if frame:
-            print(f"Received: {frame[0].hex()}")
-        
-        await async_kiss.stop()
+- Compliance Report: [docs/compliance.md](docs/compliance.md)
+- API Reference: [docs/api_reference.md](docs/api_reference.md)
+- Examples: [examples/](examples/)
 
-    # Run async application
-    asyncio.run(main())
+## References
 
-### Connected Mode Operation
+Built from primary sources:
 
-    from pyax25_22.core.connected import ConnectedModeHandler
-    from pyax25_22.interfaces.kiss import SerialKISSInterface
+- AX.25 Link Access Protocol for Amateur Packet Radio v2.2 (July 1998)
+- Multi-Drop KISS Operation – Karl Medcalf WK5M
+- AGW TCP/IP Socket Interface – George Rossopoulos SV2AGW (2000)
+- AGWPE TCP/IP API Tutorial – Pedro E. Colla LU7DID & SV2AGW
+- PACSAT File Header Definition – Jeff Ward G0/K8KA & Harold Price NK6K
 
-    # Create transport
-    transport = SerialKISSInterface('/dev/ttyUSB0', 9600)
+## Contributing
 
-    # Create connection handler
-    conn = ConnectedModeHandler(
-        my_call='MYCALL',
-        send_frame_fn=transport.send_frame,
-        frame_callback=lambda data: print(f"Received: {data}")
-    )
+Contributions are welcome! Please:
+- Follow existing code style
+- Add tests for new features
+- Update documentation
 
-    # Establish connection
-    conn.connect('DESTCALL')
+## License
 
-    # Send data
-    conn.send_data(b"Hello Connected Mode!")
+Licensed under **LGPL-3.0-or-later**.
 
-    # Disconnect
-    conn.disconnect()
-
-## Performance Characteristics
-
-### Frame Processing Performance
-- **Frame Encoding**: < 1ms average for typical frames
-- **Frame Decoding**: < 1ms average for typical frames
-- **FCS Calculation**: < 0.1ms for 1KB frames
-- **Bit Stuffing**: < 0.5ms for 1KB frames
-
-### Throughput Capabilities
-- **Serial Interface**: Up to 115200 baud with hardware flow control
-- **TCP Interface**: Limited by network bandwidth and latency
-- **Async Processing**: 1000+ frames/second with async processing
-- **Memory Usage**: Optimized with pooling, ~10KB typical memory footprint
-
-### Scalability
-- **Concurrent Connections**: Limited by system resources
-- **Frame Queue**: Configurable buffer sizes up to 1000 frames
-- **Thread Safety**: All operations thread-safe with minimal locking
-- **Async Support**: Non-blocking I/O for high-throughput applications
-
-## Error Handling and Recovery
-
-### Transport Errors
-- **Serial**: Port not found, permission denied, hardware errors
-- **TCP**: Connection refused, timeout, network unreachable
-- **AGWPE**: Server not responding, protocol errors, version mismatches
-
-### Protocol Errors
-- **Frame Validation**: Invalid frame format, bad FCS, malformed addresses
-- **Sequence Errors**: Out-of-sequence frames, sequence number wraparound
-- **Window Violations**: Frames outside receive window
-- **Timeout Conditions**: T1 retransmission, T2 acknowledgment, T3 inactivity
-
-### Recovery Mechanisms
-- **Automatic Reconnection**: Configurable retry intervals and backoff
-- **Error Callbacks**: Custom error handling and notification
-- **Graceful Degradation**: Continue operation with reduced functionality
-- **Resource Cleanup**: Proper cleanup on errors and shutdown
-
-## Testing and Quality Assurance
-
-### Test Coverage
-- **Unit Tests**: 100% coverage of core functionality
-- **Integration Tests**: End-to-end system testing
-- **Performance Tests**: Benchmarking and stress testing
-- **Error Condition Tests**: All error paths and edge cases
-
-### Test Categories
-- **Frame Tests**: Encoding/decoding, validation, edge cases
-- **Interface Tests**: All transport types with mock hardware
-- **State Machine Tests**: All state transitions and timeouts
-- **Performance Tests**: Throughput and memory usage benchmarks
-- **Integration Tests**: Complete system scenarios
-
-### Quality Metrics
-- **Code Coverage**: >95% line coverage, >90% branch coverage
-- **Performance**: <1ms frame processing, >1000 fps throughput
-- **Memory**: <10MB typical usage, optimized allocation patterns
-- **Reliability**: Comprehensive error handling and recovery
-
-## Production Deployment
-
-### System Requirements
-- **Python**: 3.8 or later
-- **Dependencies**: pyserial >= 3.5 (optional), asyncio (built-in)
-- **Hardware**: Serial port, TCP network, or AGWPE-compatible TNC
-- **OS**: Linux, Windows, macOS, Raspberry Pi OS
-
-### Installation
-
-    # Basic installation
-    pip install pyax25_22
-
-    # Development installation
-    git clone https://github.com/ke4ahr/PyAX25_22.git
-    cd PyAX25_22
-    pip install -e .
-
-    # Testing installation
-    pip install -e ".[test]"
-    pytest tests/
-
-### Configuration
-
-    # Basic configuration
-    from pyax25_22.core.framing import AX25Frame
-    from pyax25_22.interfaces.kiss import SerialKISSInterface
-
-    # Configure logging
-    import logging
-    logging.basicConfig(level=logging.INFO)
-
-    # Create and configure interface
-    serial_kiss = SerialKISSInterface(
-        port='/dev/ttyUSB0',
-        baudrate=9600,
-        tnc_address=1,
-        poll_interval=0.1
-    )
-
-    # Set up callbacks
-    def frame_callback(frame_data, tnc_address):
-        print(f"Frame from TNC {tnc_address}: {frame_data.decode()}")
-
-    serial_kiss.register_rx_callback(frame_callback)
-
-### Monitoring and Debugging
-
-    # Enable debug logging
-    logging.getLogger('pyax25_22').setLevel(logging.DEBUG)
-
-    # Monitor statistics
-    stats = serial_kiss.get_stats()
-    print(f"Frames sent: {stats['frames_sent']}")
-    print(f"Frames received: {stats['frames_received']}")
-    print(f"Errors: {stats['errors']}")
-
-    # Monitor connection status
-    status = serial_kiss.get_status()
-    print(f"Connected: {status['connected']}")
-    print(f"Last activity: {status['last_activity']}")
-
-## Future Enhancements
-
-### Potential Improvements
-- **Additional Transport Types**: Sound card modems, sound card TNC
-- **Protocol Extensions**: AX.25 v2.3 features, enhanced addressing
-- **Web Interface**: Web-based configuration and monitoring
-- **GUI Applications**: Desktop applications for amateur radio use
-- **Integration**: Integration with popular amateur radio software
-
-### Development Roadmap
-- **v1.0**: Current complete implementation
-- **v1.1**: Performance optimizations and additional transports
-- **v1.2**: Enhanced monitoring and web interface
-- **v2.0**: Protocol extensions and GUI applications
-
-## Support and Community
-
-### Documentation
-- **API Reference**: Complete API documentation in `docs/api/`
-- **User Guide**: Step-by-step user guide in `docs/index.md`
-- **Examples**: Working examples in `examples/` and `docs/examples/`
-- **Troubleshooting**: Common issues and solutions in documentation
-
-### Getting Help
-- **Issues**: GitHub issues for bug reports and feature requests
-- **Discussions**: Community discussions and support
-- **Examples**: Real-world usage examples and patterns
-- **Testing**: Comprehensive test suite for validation
-
-## Conclusion
-
-PyAX25_22 represents a **complete, production-ready implementation** of the AX.25 v2.2 protocol suite. It provides:
-
-- **Comprehensive Protocol Support**: All AX.25 frame types and features
-- **Multiple Transport Interfaces**: Serial, TCP, and AGWPE with async support
-- **High Performance**: Optimized for real-time amateur radio applications
-- **Robust Error Handling**: Comprehensive error detection and recovery
-- **Easy Integration**: Clean APIs with extensive documentation and examples
-- **Production Quality**: Full test coverage, performance monitoring, and documentation
-
-The implementation is suitable for a wide range of amateur radio applications including packet radio, APRS, digital modes, and custom communication protocols. It provides a solid foundation for both hobbyist projects and professional applications in the amateur radio community.
+Full license text: [LICENSE](LICENSE)
 
 ---
 
-*This file is automatically maintained and reflects the current implementation status.*
+73 de KE4AHR
 
-**IMPLEMENTATION STATUS: COMPLETE - PRODUCTION READY**
-
-
+Copyright (C) 2025-2026 Kris Kirby, KE4AHR

@@ -7,7 +7,7 @@ TCP KISS Interface Implementation
 Implements KISS over TCP with multi-drop support and keepalive handling.
 
 License: LGPLv3.0
-Copyright (C) 2024 Kris Kirby, KE4AHR
+Copyright (C) 2025-2026 Kris Kirby, KE4AHR
 """
 
 import socket

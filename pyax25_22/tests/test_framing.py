@@ -14,8 +14,6 @@ Covers:
 - Edge cases
 - Performance testing
 
-License: LGPLv3.0
-Copyright (C) 2024 QA Team
 """
 
 import pytest

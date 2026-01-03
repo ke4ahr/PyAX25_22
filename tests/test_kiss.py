@@ -9,7 +9,8 @@ Covers:
 - Error conditions
 
 License: LGPLv3.0
-Copyright (C) 2024 QA Team
+Copyright (C) 2025-2026 Kris Kirby, KE4AHR
+
 """
 
 import pytest

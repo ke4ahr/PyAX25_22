@@ -6,7 +6,7 @@ Provides:
 - run_in_thread: Execute blocking calls in thread pool without blocking event loop
 
 License: LGPLv3.0
-Copyright (C) 2024 Kris Kirby, KE4AHR
+Copyright (C) 2025-2026 Kris Kirby, KE4AHR
 """
 
 import asyncio

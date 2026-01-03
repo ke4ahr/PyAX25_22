@@ -4,7 +4,8 @@
 AGWPE (AGW Packet Engine) is a TCP-based protocol for interfacing with packet radio software/hardware. This document covers version-compatible implementation in PyAX25_22.
 
 **License**: LGPLv3.0  
-**Copyright**: (C) 2024 Kris Kirby, KE4AHR
+**Copyright** (C) 2025-2026 Kris Kirby, KE4AHR
+
 
 ## Frame Structure
 

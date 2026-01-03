@@ -3,8 +3,9 @@
 ## Introduction
 The KISS (Keep It Simple, Stupid) protocol provides a hardware-agnostic interface for AX.25 packet communication. This document covers both standard RFC 1055 KISS and PyAX25_22's multi-drop extensions.
 
-**License**: LGPLv3.0  
-**Copyright**: (C) 2024 Kris Kirby, KE4AHR
+**License:** LGPLv3.0
+**Copyright** (C) 2025-2026 Kris Kirby, KE4AHR
+
 
 ## Frame Format
 

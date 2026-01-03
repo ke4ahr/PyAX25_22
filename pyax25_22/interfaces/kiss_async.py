@@ -6,8 +6,6 @@ Asynchronous KISS Interface Implementation
 
 Implements non-blocking KISS communication with multi-drop support.
 
-License: LGPLv3.0
-Copyright (C) 2024 Kris Kirby, KE4AHR
 """
 
 import asyncio

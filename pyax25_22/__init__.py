@@ -8,7 +8,8 @@ Provides:
 - Connected-mode state machine
 
 License: LGPLv3.0
-Copyright (C) 2024 Kris Kirby, KE4AHR
+Copyright (C) 2025-2026 Kris Kirby, KE4AHR
+
 """
 
 __version__ = "0.1.0"
