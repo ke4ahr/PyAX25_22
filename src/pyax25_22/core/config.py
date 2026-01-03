@@ -152,6 +152,6 @@ CONFIG_PACSAT_BROADCAST = AX25Config(
     modulo=8,
     max_frame=256,
     window_size=1,  # Unconnected UI frames
-    t1_timeout=0.0,  # No retransmission
+    t1_timeout=10.0,  # No retransmission; was 0.0, causes errors on import.
     retry_count=0,
 )
