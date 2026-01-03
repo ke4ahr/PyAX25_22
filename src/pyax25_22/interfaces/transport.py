@@ -2,7 +2,7 @@
 # Copyright (C) 2025-2026 Kris Kirby, KE4AHR
 
 """
-pyax25-22.interfaces.transport.py
+pyax25_22.interfaces.transport.py
 
 Abstract base class for all transport interfaces in PyAX25_22.
 
@@ -17,8 +17,8 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Optional, Any
 
-from pyax25-22.core.framing import AX25Frame
-from pyax25-22.core.exceptions import TransportError
+from pyax25_22.core.framing import AX25Frame
+from pyax25_22.core.exceptions import TransportError
 
 logger = logging.getLogger(__name__)
 

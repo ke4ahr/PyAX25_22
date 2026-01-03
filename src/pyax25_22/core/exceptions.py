@@ -2,7 +2,7 @@
 # Copyright (C) 2025-2026 Kris Kirby, KE4AHR
 
 """
-pyax25-22.core.exceptions.py
+pyax25_22.core.exceptions.py
 
 Comprehensive exception hierarchy for PyAX25_22.
 

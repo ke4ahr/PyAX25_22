@@ -2,7 +2,7 @@
 # Copyright (C) 2025-2026 Kris Kirby, KE4AHR
 
 """
-pyax25-22.core.flow_control.py
+pyax25_22.core.flow_control.py
 
 AX.25 v2.2 compliant flow control and selective reject implementation.
 

@@ -23,12 +23,12 @@ import signal
 import sys
 import logging
 
-from pyax25-22.interfaces.agwpe import AGWPEInterface
-from pyax25-22.utils.logging import get_logger
+from pyax25_22.interfaces.agwpe import AGWPEInterface
+from pyax25_22.utils.logging import get_logger
 
 # Configure logging for the example
 logger = get_logger("agwpe_monitor")
-logging.getLogger("pyax25-22").setLevel(logging.INFO)
+logging.getLogger("pyax25_22").setLevel(logging.INFO)
 
 # Default configuration - modify for your setup
 AGWPE_HOST = "127.0.0.1"

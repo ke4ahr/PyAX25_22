@@ -2,7 +2,7 @@
 # Copyright (C) 2025-2026 Kris Kirby, KE4AHR
 
 """
-pyax25-22.core.statemachine.py
+pyax25_22.core.statemachine.py
 
 AX.25 v2.2 compliant state machine implementation.
 

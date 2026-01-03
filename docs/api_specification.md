@@ -1,6 +1,6 @@
 # PyAX25_22 API Reference
 
-## Core Module (`pyax25-22.core`)
+## Core Module (`pyax25_22.core`)
 
 ### Framing
 
@@ -60,7 +60,7 @@ Adaptive T1 and T3 management.
 ### Exceptions
 Full hierarchy under `AX25Error`.
 
-## Interfaces Module (`pyax25-22.interfaces`)
+## Interfaces Module (`pyax25_22.interfaces`)
 
 #### `KISSInterface`
 Multi-drop KISS serial/TCP.

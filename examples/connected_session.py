@@ -18,9 +18,9 @@ This example shows how to:
 Run this script to see a simulated connected session lifecycle.
 """
 
-from pyax25-22.core.framing import AX25Address
-from pyax25-22.core.connected import AX25Connection
-from pyax25-22.core.config import DEFAULT_CONFIG_MOD8
+from pyax25_22.core.framing import AX25Address
+from pyax25_22.core.connected import AX25Connection
+from pyax25_22.core.config import DEFAULT_CONFIG_MOD8
 
 def main() -> None:
     """
@@ -55,7 +55,7 @@ def main() -> None:
     print("2. Simulating peer response (UA)...")
     # In real code, this would come from transport.receive()
     # Here we create a mock UA frame
-    from pyax25-22.core.framing import AX25Frame
+    from pyax25_22.core.framing import AX25Frame
     ua_control = 0x63  # UA with F=1
     ua_frame = AX25Frame(
         destination=local,

@@ -1,4 +1,4 @@
-# pyax25-22/__init__.py
+# pyax25_22/__init__.py
 """
 PyAX25_22 - Pure Python AX.25 Layer 2 Implementation
 

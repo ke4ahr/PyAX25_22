@@ -20,11 +20,11 @@ import pytest
 import struct
 from unittest.mock import Mock, patch
 
-from pyax25-22.interfaces.kiss import KISSInterface, FEND, FESC, TFEND, TFESC, CMD_DATA, CMD_TXDELAY
-from pyax25-22.interfaces.agwpe import AGWPEInterface, HEADER_FMT, HEADER_SIZE
-from pyax25-22.interfaces.transport import validate_frame_for_transport
-from pyax25-22.core.framing import AX25Frame, AX25Address
-from pyax25-22.core.exceptions import KISSError, AGWPEError, TransportError
+from pyax25_22.interfaces.kiss import KISSInterface, FEND, FESC, TFEND, TFESC, CMD_DATA, CMD_TXDELAY
+from pyax25_22.interfaces.agwpe import AGWPEInterface, HEADER_FMT, HEADER_SIZE
+from pyax25_22.interfaces.transport import validate_frame_for_transport
+from pyax25_22.core.framing import AX25Frame, AX25Address
+from pyax25_22.core.exceptions import KISSError, AGWPEError, TransportError
 
 
 @pytest.fixture

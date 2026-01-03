@@ -2,7 +2,7 @@
 # Copyright (C) 2025-2026 Kris Kirby, KE4AHR
 
 """
-pyax25-22.interfaces.kiss.py
+pyax25_22.interfaces.kiss.py
 
 KISS (Keep It Simple Stupid) interface implementation with full multi-drop support.
 
@@ -27,8 +27,8 @@ import queue
 import logging
 from typing import Optional, Callable, Tuple
 
-from pyax25-22.core.framing import AX25Frame
-from pyax25-22.core.exceptions import KISSError
+from pyax25_22.core.framing import AX25Frame
+from pyax25_22.core.exceptions import KISSError
 
 logger = logging.getLogger(__name__)
 

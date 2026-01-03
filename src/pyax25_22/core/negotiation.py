@@ -2,7 +2,7 @@
 # Copyright (C) 2025-2026 Kris Kirby, KE4AHR
 
 """
-pyax25-22.core.negotiation.py
+pyax25_22.core.negotiation.py
 
 XID Frame handling and parameter negotiation per AX.25 v2.2 Section 4.3.4.
 

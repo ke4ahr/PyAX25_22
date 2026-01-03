@@ -2,7 +2,7 @@
 # Copyright (C) 2025-2026 Kris Kirby, KE4AHR
 
 """
-pyax25-22.interfaces.agwpe.py
+pyax25_22.interfaces.agwpe.py
 
 Full AGWPE TCP/IP API client implementation.
 
@@ -35,8 +35,8 @@ import asyncio
 import logging
 from typing import Optional, Callable, Tuple, Dict
 
-from pyax25-22.core.exceptions import AGWPEError
-from pyax25-22.core.framing import AX25Frame  # For potential frame integration
+from pyax25_22.core.exceptions import AGWPEError
+from pyax25_22.core.framing import AX25Frame  # For potential frame integration
 
 logger = logging.getLogger(__name__)
 

@@ -2,19 +2,19 @@
 # Copyright (C) 2025-2026 Kris Kirby, KE4AHR
 
 """
-pyax25-22.utils.logging.py
+pyax25_22.utils.logging.py
 
 Centralized logging configuration for PyAX25_22.
 
 Provides a consistent, structured logging setup across all modules:
-- Hierarchical loggers (pyax25-22.core, pyax25-22.interfaces, etc.)
+- Hierarchical loggers (pyax25_22.core, pyax25_22.interfaces, etc.)
 - Configurable log level via environment variable PYAX25_LOG_LEVEL
 - Thread-safe formatter with timestamp, logger name, level, and message
 - Console output with color support (if colorlog available)
 - File handler optional via PYAX25_LOG_FILE
 
 Usage:
-    from pyax25-22.utils.logging import get_logger
+    from pyax25_22.utils.logging import get_logger
     logger = get_logger(__name__)
     logger.info("Something happened")
 """
@@ -34,7 +34,7 @@ except ImportError:
     HAS_COLORLOG = False
 
 # Global root logger name
-ROOT_LOGGER_NAME = "pyax25-22"
+ROOT_LOGGER_NAME = "pyax25_22"
 
 # Default log level
 DEFAULT_LOG_LEVEL = logging.INFO

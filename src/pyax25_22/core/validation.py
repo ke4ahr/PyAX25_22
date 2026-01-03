@@ -2,7 +2,7 @@
 # Copyright (C) 2025-2026 Kris Kirby, KE4AHR
 
 """
-pyax25-22.core.validation.py
+pyax25_22.core.validation.py
 
 Comprehensive validation utilities for AX.25 v2.2 compliance.
 

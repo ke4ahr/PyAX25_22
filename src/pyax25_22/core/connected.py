@@ -2,7 +2,7 @@
 # Copyright (C) 2025-2026 Kris Kirby, KE4AHR
 
 """
-pyax25-22.core.connected.py
+pyax25_22.core.connected.py
 
 Connected-mode AX.25 session management per AX.25 v2.2 specification.
 

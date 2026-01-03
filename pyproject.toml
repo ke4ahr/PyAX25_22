@@ -59,8 +59,7 @@ Documentation = "https://github.com/ke4ahr/PyAX25_22/tree/main/docs"
 "Source Code" = "https://github.com/ke4ahr/PyAX25_22"
 
 [tool.setuptools.packages.find]
-where = ["."]
-include = ["pyax25-22*"]
+where = ["src"]
 
 [tool.setuptools.package-data]
-"pyax25-22" = ["*.py"]
+"pyax25_22" = ["*.py"]

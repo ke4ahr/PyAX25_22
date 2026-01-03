@@ -2,7 +2,7 @@
 # Copyright (C) 2025-2026 Kris Kirby, KE4AHR
 
 """
-pyax25-22.core.__init__.py
+pyax25_22.core.__init__.py
 
 Public API for the core AX.25 v2.2 implementation.
 
@@ -102,4 +102,4 @@ __all__ = [
 if __name__ == "__main__":
     print(f"PyAX25_22 core module v{__version__}")
     print("This is a library module. Import from your application:")
-    print("    from pyax25-22.core import AX25Frame, AX25Connection")
+    print("    from pyax25_22.core import AX25Frame, AX25Connection")

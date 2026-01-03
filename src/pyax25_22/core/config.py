@@ -2,7 +2,7 @@
 # Copyright (C) 2025-2026 Kris Kirby, KE4AHR
 
 """
-pyax25-22.core.config.py
+pyax25_22.core.config.py
 
 Configuration management for AX.25 v2.2 protocol parameters.
 
