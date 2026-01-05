@@ -12,13 +12,11 @@ Copyright (C) 2025-2026 Kris Kirby, KE4AHR
 
 """
 
-__version__ = "0.5.5"
+__version__ = "0.5.6"
 
 # Core AX.25 functionality
 from .core.framing import (
     AX25Frame,
-    encode_address,
-    decode_address,
     fcs_calc,
     bit_stuff,
     bit_destuff
@@ -61,8 +59,6 @@ from .utils import (
 __all__ = [
     # Core
     'AX25Frame',
-    'encode_address',
-    'decode_address',
     'fcs_calc',
     'bit_stuff',
     'bit_destuff',
