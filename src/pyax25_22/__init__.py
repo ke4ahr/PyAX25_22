@@ -12,7 +12,7 @@ Copyright (C) 2025-2026 Kris Kirby, KE4AHR
 
 """
 
-__version__ = "0.5.9"
+__version__ = "0.5.10"
 
 # Core AX.25 functionality
 from .core.framing import (
@@ -27,7 +27,6 @@ from .core.statemachine import (
 # Transport interfaces
 from .interfaces.kiss import (
     KISSInterface,
-    KISSCommand,
     SerialKISSInterface,
     TCPKISSInterface
 )
@@ -63,7 +62,6 @@ __all__ = [
     
     # Interfaces
     'KISSInterface',
-    'KISSCommand',
     'SerialKISSInterface',
     'TCPKISSInterface',
     'AsyncKISSInterface',
