@@ -14,6 +14,8 @@ All concrete transports must implement this ABC for consistency.
 
 from __future__ import annotations
 
+import logging
+
 from abc import ABC, abstractmethod
 from typing import Optional, Any
 

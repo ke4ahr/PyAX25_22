@@ -12,7 +12,7 @@ Copyright (C) 2025-2026 Kris Kirby, KE4AHR
 
 """
 
-__version__ = "0.5.7"
+__version__ = "0.5.8"
 
 # Core AX.25 functionality
 from .core.framing import (
