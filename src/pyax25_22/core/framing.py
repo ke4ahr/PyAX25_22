@@ -95,7 +95,7 @@ class AX25Address:
         if not (1 <= len(callsign_clean) <= 6):
             raise InvalidAddressError(f"Callsign '{self.callsign}' length invalid")
 
-        # Shift callsign characters left by 1 (no masking needed — ASCII fits in 6 bits)
+        # Shift callsign characters left by 1
         self._call_bytes = bytes((ord(c) << 1) for c in callsign_clean.ljust(6, " "))
 
     def encode(self, last: bool = False) -> bytes:
@@ -248,9 +248,7 @@ class AX25Frame:
                 if ones_count == 5:
                     if bit == 0:
                         ones_count = 0
-                    else:
-                        # Invalid — but skip for robustness
-                        pass
+                    # Ignore invalid 1 after 5 ones
                     if bit_pos == 8:
                         result.append(current_byte)
                         current_byte = 0
