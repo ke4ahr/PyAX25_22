@@ -5,8 +5,8 @@
 
 **Author:** Kris Kirby, KE4AHR  
 **License:** GNU Lesser General Public License v3 or later (LGPL-3.0-or-later)  
-**Version:** 0.1.1  
-**Release Date:** January 02, 2026  
+**Version:** 0.5.15  
+**Release Date:** January 05, 2026  
 **Repository:** https://github.com/ke4ahr/PyAX25_22
 
 ## Overview

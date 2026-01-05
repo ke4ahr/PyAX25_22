@@ -23,7 +23,7 @@ from typing import List, Optional
 import logging
 
 from .framing import AX25Frame
-from .statemachine import AX25StateMachine
+from .statemachine import AX25StateMachine, AX25State
 from .config import AX25Config
 from .exceptions import FrameError
 
@@ -147,7 +147,7 @@ class AX25FlowControl:
             return None
 
         # Control field: REJ with P/F bit based on state
-        pf_bit = 0x10 if self.sm.state == AX25StateMachine.TIMER_RECOVERY else 0x00
+        pf_bit = 0x10 if self.sm.state == AX25State.TIMER_RECOVERY else 0x00
         control = 0x09 | (nr << 5) | pf_bit  # REJ base
 
         self.rej_sent = True
@@ -175,7 +175,7 @@ class AX25FlowControl:
             return None
 
         # Control field: SREJ with P/F bit
-        pf_bit = 0x10 if self.sm.state == AX25StateMachine.TIMER_RECOVERY else 0x00
+        pf_bit = 0x10 if self.sm.state == AX25State.TIMER_RECOVERY else 0x00
         control = 0x0D | (nr << 5) | pf_bit
 
         self.srej_sent = True
@@ -222,3 +222,4 @@ class AX25FlowControl:
         self.rej_sent = False
         self.srej_sent = False
         logger.info("Flow control state reset")
+}
