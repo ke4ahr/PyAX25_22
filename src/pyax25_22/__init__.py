@@ -1,99 +1,69 @@
-# pyax25_22/__init__.py
-"""
-PyAX25_22 - Pure Python AX.25 Layer 2 Implementation
-
-Provides:
-- AX.25 frame encoding/decoding (v2.2)
-- KISS and AGWPE transport interfaces
-- Connected-mode state machine
-
-License: LGPLv3.0
-Copyright (C) 2025-2026 Kris Kirby, KE4AHR
+# SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (C) 2025-2026 Kris Kirby, KE4AHR
 
 """
+pyax25_22.__init__.py
 
-__version__ = "0.5.12"
+Top-level package API for PyAX25_22.
 
-# Core AX.25 functionality
-from .core.framing import (
+Provides convenient access to the most commonly used components:
+- Core framing and connection classes
+- Transport interfaces (KISS, AGWPE)
+- Version information
+
+Users should import from this namespace:
+    import pyax25_22
+    from pyax25_22 import AX25Frame, KISSInterface
+"""
+
+from __future__ import annotations
+
+# Core components
+from .core import (
     AX25Frame,
-    fcs_calc,
-)
-from .core.statemachine import (
-    AX25StateMachine,
-    AX25State
+    AX25Address,
+    AX25Connection,
+    AX25Config,
+    DEFAULT_CONFIG_MOD8,
+    DEFAULT_CONFIG_MOD128,
+    validate_frame_structure,
+    full_validation,
 )
 
-# Transport interfaces
-from .interfaces.kiss import (
+# Interfaces
+from .interfaces import (
     KISSInterface,
-    TCPKISSInterface
-)
-from .interfaces.kiss_async import (
-    AsyncKISSInterface,
-    AsyncTCPKISSInterface
-)
-from .interfaces.agwpe import (
-    AGWClient,
-    AsyncAGWClient
+    AGWPEInterface,
+    TransportInterface,
 )
 
-# Exceptions
-from .exceptions import (
-    AX25Error,
-    TransportError,
-    KISSProtocolError,
-    AGWProtocolError
-)
+# Version
+from .core import __version__
 
-# Utilities
-from .utils import (
-    configure_logging,
-    get_version
-)
-
+# Explicit public API
 __all__ = [
     # Core
-    'AX25Frame',
-    'fcs_calc',
-    'AX25StateMachine',
-    'AX25State',
-    
+    "AX25Frame",
+    "AX25Address",
+    "AX25Connection",
+    "AX25Config",
+    "DEFAULT_CONFIG_MOD8",
+    "DEFAULT_CONFIG_MOD128",
+    "validate_frame_structure",
+    "full_validation",
+
     # Interfaces
-    'KISSInterface',
-    'TCPKISSInterface',
-    'AsyncKISSInterface',
-    'AsyncTCPKISSInterface',
-    'AGWClient',
-    'AsyncAGWClient',
-    
-    # Exceptions
-    'AX25Error',
-    'TransportError',
-    'KISSProtocolError',
-    'AGWProtocolError',
-    
-    # Utilities
-    'configure_logging',
-    'get_version',
-    
+    "KISSInterface",
+    "AGWPEInterface",
+    "TransportInterface",
+
     # Metadata
-    '__version__'
+    "__version__",
 ]
 
-def configure_logging(level: str = "INFO") -> None:
-    """
-    Configure package-wide logging.
-    
-    Args:
-        level: Logging level (DEBUG, INFO, WARNING, ERROR)
-    """
-    import logging
-    logging.basicConfig(
-        level=getattr(logging, level.upper()),
-        format='%(asctime)s %(name)s %(levelname)s: %(message)s'
-    )
-
-def get_version() -> str:
-    """Return the package version."""
-    return __version__
+# Friendly message when package executed directly
+if __name__ == "__main__":
+    print(f"PyAX25_22 package v{__version__}")
+    print("This is a library package. Import symbols in your application:")
+    print("    from pyax25_22 import AX25Frame, KISSInterface")
+    print("See README.md and docs/ for usage examples.")
