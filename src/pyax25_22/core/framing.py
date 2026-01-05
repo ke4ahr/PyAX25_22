@@ -179,7 +179,9 @@ class AX25Frame:
             addr_field += digi.encode(last=last)
 
         # Control + PID + Info
-        payload = bytes([self.control])
+        payload = bytes([self.control & 0xFF])
+        if self.config.modulo == 128 and (self.control & 0x01 == 0):  # Extended I-frame
+            payload += bytes([(self.control >> 8) & 0xFF])
         if self.pid is not None:
             payload += bytes([self.pid])
         payload += self.info
@@ -199,54 +201,78 @@ class AX25Frame:
         """Apply AX.25 bit stuffing: insert 0 after five consecutive 1s."""
         result = bytearray()
         ones_count = 0
+        current_byte = 0
+        bit_pos = 0
+
         for byte in data:
-            mask = 1
-            for _ in range(8):
-                bit = (byte & mask) != 0
-                result.append(1 if bit else 0)
-                if bit:
+            for i in range(8):
+                bit = (byte >> i) & 1
+                current_byte |= bit << bit_pos
+                bit_pos += 1
+
+                if bit == 1:
                     ones_count += 1
                     if ones_count == 5:
-                        result.append(0)
+                        # Insert stuffed 0
+                        if bit_pos == 8:
+                            result.append(current_byte)
+                            current_byte = 0
+                            bit_pos = 0
                         ones_count = 0
                 else:
                     ones_count = 0
-                mask <<= 1
-        # Pad to byte boundary
-        padding = (8 - len(result) % 8) % 8
-        result.extend([0] * padding)
-        # Convert to bytes
-        return bytes([int(''.join(str(b) for b in result[i:i+8]), 2) for i in range(0, len(result), 8)])
+
+                if bit_pos == 8:
+                    result.append(current_byte)
+                    current_byte = 0
+                    bit_pos = 0
+
+        # Flush remaining bits
+        if bit_pos > 0:
+            result.append(current_byte)
+
+        return bytes(result)
 
     @classmethod
     def _bit_destuff(cls, data: bytes) -> bytes:
         """Remove AX.25 bit stuffing: remove 0 after five consecutive 1s."""
         result = bytearray()
         ones_count = 0
+        current_byte = 0
+        bit_pos = 0
+
         for byte in data:
-            mask = 1
-            for _ in range(8):
-                bit = (byte & mask) != 0
+            for i in range(8):
+                bit = (byte >> i) & 1
+                current_byte |= bit << bit_pos
+                bit_pos += 1
+
                 if ones_count == 5:
-                    if bit:
+                    if bit == 0:
+                        ones_count = 0
+                    else:
                         raise BitStuffingError("Invalid stuffed sequence")
-                    ones_count = 0
-                    mask <<= 1
+                    if bit_pos == 8:
+                        result.append(current_byte)
+                        current_byte = 0
+                        bit_pos = 0
                     continue
-                if bit:
-                    result.append(1)
+
+                if bit == 1:
                     ones_count += 1
                 else:
-                    result.append(0)
                     ones_count = 0
-                mask <<= 1
-        # Remove padding
-        while result and result[-1] == 0:
-            result.pop()
-        # Convert to bytes
-        padding = (8 - len(result) % 8) % 8
-        result.extend([0] * padding)
-        return bytes([int(''.join(str(b) for b in result[i:i+8]), 2) for i in range(0, len(result), 8)])
+
+                if bit_pos == 8:
+                    result.append(current_byte)
+                    current_byte = 0
+                    bit_pos = 0
+
+        # Flush
+        if bit_pos > 0:
+            result.append(current_byte)
+
+        return bytes(result)
 
     @classmethod
     def decode(cls, raw: bytes, config: AX25Config = DEFAULT_CONFIG_MOD8) -> "AX25Frame":
@@ -276,11 +302,19 @@ class AX25Frame:
             digipeaters.append(digi)
             offset += 7
 
+        # Control field
         control = destuffed[offset]
         offset += 1
+        if config.modulo == 128 and (control & 0x01 == 0):  # Extended I-frame
+            if offset >= len(destuffed):
+                raise FrameError("Truncated extended control field")
+            control |= destuffed[offset] << 8
+            offset += 1
 
         pid = None
         if (control & 0x01 == 0) or (control & 0x03 == 0x03):
+            if offset >= len(destuffed):
+                raise FrameError("Truncated PID field")
             pid = destuffed[offset]
             offset += 1
 
