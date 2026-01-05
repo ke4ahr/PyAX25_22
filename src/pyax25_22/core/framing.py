@@ -13,7 +13,6 @@ Implements:
 - Information field
 - Bit stuffing / destuffing
 - FCS calculation and verification (CRC-16/CCITT-FALSE)
-- Frame validation utilities
 
 Fully compliant with AX.25 v2.2 specification (July 1998).
 """

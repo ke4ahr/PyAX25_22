@@ -100,3 +100,8 @@ def full_validation(frame: AX25Frame, config: Optional[AX25Config] = None) -> No
     """
     validate_frame_structure(frame, config)
     logger.info("Full frame validation completed successfully")
+
+__all__ = [
+    "validate_frame_structure",
+    "full_validation",
+]

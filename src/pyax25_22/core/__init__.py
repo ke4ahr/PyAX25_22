@@ -27,7 +27,7 @@ from .config import AX25Config, DEFAULT_CONFIG_MOD8, DEFAULT_CONFIG_MOD128
 from .flow_control import AX25FlowControl
 from .timers import AX25Timers
 from .negotiation import build_xid_frame, parse_xid_frame, negotiate_config
-from .validation import validate_frame
+from .validation import validate_frame_structure, full_validation
 
 # Exception hierarchy
 from .exceptions import (
@@ -48,7 +48,7 @@ from .exceptions import (
 )
 
 # Version
-__version__ = "0.5.3"
+__version__ = "0.1.0"
 
 # Public API list – explicitly exported symbols
 __all__ = [
@@ -57,7 +57,10 @@ __all__ = [
     "AX25Address",
     "fcs_calc",
     "verify_fcs",
-    "validate_frame",
+
+    # Validation
+    "validate_frame_structure",
+    "full_validation",
 
     # Connection & State
     "AX25Connection",
