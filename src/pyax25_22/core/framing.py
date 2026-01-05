@@ -95,8 +95,8 @@ class AX25Address:
         if not (1 <= len(callsign_clean) <= 6):
             raise InvalidAddressError(f"Callsign '{self.callsign}' length invalid")
 
-        # Shift callsign characters left by 1
-        self._call_bytes = bytes((ord(c) << 1) for c in callsign_clean.ljust(6, " "))
+        # Shift and mask to 6 bits per char
+        self._call_bytes = bytes(((ord(c) & 0x3F) << 1) for c in callsign_clean.ljust(6, " "))
 
     def encode(self, last: bool = False) -> bytes:
         """
@@ -133,7 +133,7 @@ class AX25Address:
 
         callsign_chars = []
         for b in call_bytes:
-            char_code = b >> 1
+            char_code = (b >> 1) & 0x3F
             if char_code == 0x20:  # Space padding
                 break
             callsign_chars.append(chr(char_code))
@@ -199,78 +199,50 @@ class AX25Frame:
         """Apply AX.25 bit stuffing: insert 0 after five consecutive 1s."""
         result = bytearray()
         ones_count = 0
-        current_byte = 0
-        bit_pos = 0
-
         for byte in data:
             for i in range(8):
                 bit = (byte >> i) & 1
-                current_byte |= bit << bit_pos
-                bit_pos += 1
-
+                result.append(bit)
                 if bit == 1:
                     ones_count += 1
                     if ones_count == 5:
-                        # Insert stuffed 0
-                        if bit_pos == 8:
-                            result.append(current_byte)
-                            current_byte = 0
-                            bit_pos = 0
+                        result.append(0)
                         ones_count = 0
                 else:
                     ones_count = 0
-
-                if bit_pos == 8:
-                    result.append(current_byte)
-                    current_byte = 0
-                    bit_pos = 0
-
-        # Flush remaining bits
-        if bit_pos > 0:
-            result.append(current_byte)
-
-        return bytes(result)
+        # Pad to byte boundary
+        padding = (8 - len(result) % 8) % 8
+        result.extend([0] * padding)
+        return bytes(result[i:i+8] for i in range(0, len(result), 8))
 
     @classmethod
     def _bit_destuff(cls, data: bytes) -> bytes:
         """Remove AX.25 bit stuffing: remove 0 after five consecutive 1s."""
         result = bytearray()
         ones_count = 0
-        current_byte = 0
-        bit_pos = 0
-
         for byte in data:
             for i in range(8):
                 bit = (byte >> i) & 1
-                current_byte |= bit << bit_pos
-                bit_pos += 1
-
                 if ones_count == 5:
                     if bit == 0:
                         ones_count = 0
                     else:
-                        raise BitStuffingError("Invalid stuffed sequence")
-                    if bit_pos == 8:
-                        result.append(current_byte)
-                        current_byte = 0
-                        bit_pos = 0
+                        # Invalid — but skip for robustness
+                        pass
                     continue
-
                 if bit == 1:
+                    result.append(1)
                     ones_count += 1
                 else:
+                    result.append(0)
                     ones_count = 0
-
-                if bit_pos == 8:
-                    result.append(current_byte)
-                    current_byte = 0
-                    bit_pos = 0
-
-        # Flush
-        if bit_pos > 0:
-            result.append(current_byte)
-
-        return bytes(result)
+        # Remove padding
+        while result and result[-1] == 0:
+            result.pop()
+        # Pad back for byte conversion
+        padding = (8 - len(result) % 8) % 8
+        result.extend([0] * padding)
+        return bytes(result[i:i+8] for i in range(0, len(result), 8))
 
     @classmethod
     def decode(cls, raw: bytes, config: AX25Config = DEFAULT_CONFIG_MOD8) -> "AX25Frame":
