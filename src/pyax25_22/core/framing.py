@@ -59,7 +59,7 @@ def fcs_calc(data: bytes) -> int:
                 fcs = (fcs >> 1) ^ FCS_POLY
             else:
                 fcs >>= 1
-    return fcs ^ 0xFFFF
+    return ~fcs & 0xFFFF  # Final invert
 
 
 def verify_fcs(data: bytes, received_fcs: int) -> bool:
@@ -97,24 +97,25 @@ class AX25Address:
         if not (1 <= len(callsign_clean) <= 6):
             raise InvalidAddressError(f"Callsign '{self.callsign}' length invalid")
 
-        # Pre-encode shifted callsign bytes
-        self._call_bytes = bytes((ord(c) << 1) for c in callsign_clean.ljust(6))
+        # Shift callsign characters left by 1
+        self._call_bytes = bytes((ord(c) << 1) for c in callsign_clean.ljust(6, " "))
 
     def encode(self, last: bool = False) -> bytes:
         """
         Encode 7-byte address field.
 
-        Args:
-            last: True if this is the final address in the field
-
-        Returns:
-            7-byte encoded address
+        SSID byte format (per AX.25 v2.2):
+        - Bit 7: Reserved (always 1)
+        - Bit 6: C bit (command/response)
+        - Bit 5: H bit (has been repeated)
+        - Bits 4-1: SSID
+        - Bit 0: Extension (1 = last address)
         """
-        ssid_byte = (self.ssid << 1) | (0x01 if last else 0x00)
-        if self.c_bit:
-            ssid_byte |= 0x80
-        if self.h_bit:
-            ssid_byte |= 0x80
+        ssid_byte = 0x60  # Reserved bits 7=1, 6=0 initially
+        ssid_byte |= (self.ssid << 1) & 0x1E
+        ssid_byte |= 0x40 if self.c_bit else 0x00  # C bit in position 6
+        ssid_byte |= 0x20 if self.h_bit else 0x00  # H bit in position 5
+        ssid_byte |= 0x01 if last else 0x00        # Extension bit
 
         return self._call_bytes + bytes([ssid_byte])
 
@@ -143,8 +144,8 @@ class AX25Address:
         addr = cls(
             callsign=callsign,
             ssid=(ssid_byte >> 1) & 0x0F,
-            c_bit=bool(ssid_byte & 0x80),
-            h_bit=bool(ssid_byte & 0x80),
+            c_bit=bool(ssid_byte & 0x40),
+            h_bit=bool(ssid_byte & 0x20),
         )
 
         is_last = bool(ssid_byte & 0x01)
@@ -170,8 +171,8 @@ class AX25Frame:
         Encode complete frame with flags, bit stuffing, and FCS.
         """
         # Address field
-        addr_field = self.destination.encode(last=not self.digipeaters)
-        addr_field += self.source.encode(last=not self.digipeaters)
+        addr_field = self.destination.encode(last=len(self.digipeaters) == 0)
+        addr_field += self.source.encode(last=len(self.digipeaters) == 0)
 
         for i, digi in enumerate(self.digipeaters):
             last = i == len(self.digipeaters) - 1
@@ -195,21 +196,81 @@ class AX25Frame:
 
     @staticmethod
     def _bit_stuff(data: bytes) -> bytes:
-        """Apply NRZI bit stuffing (insert 0 after five 1s)."""
-        stuffed = bytearray()
+        """
+        Apply AX.25 bit stuffing: insert 0 after five consecutive 1s.
+        Operates on byte stream.
+        """
+        result = bytearray()
         ones_count = 0
+        bit_buffer = 0
+        bit_count = 0
+
         for byte in data:
             for i in range(8):
                 bit = (byte >> i) & 1
-                stuffed.append(bit)
+                bit_buffer |= bit << bit_count
+                bit_count += 1
+
                 if bit == 1:
                     ones_count += 1
                     if ones_count == 5:
-                        stuffed.append(0)
+                        bit_count += 1  # Insert 0
+                        if bit_count == 8:
+                            result.append(bit_buffer)
+                            bit_buffer = 0
+                            bit_count = 0
                         ones_count = 0
                 else:
                     ones_count = 0
-        return bytes(stuffed)
+
+                if bit_count == 8:
+                    result.append(bit_buffer)
+                    bit_buffer = 0
+                    bit_count = 0
+
+        # Flush remaining bits
+        if bit_count > 0:
+            result.append(bit_buffer)
+
+        return bytes(result)
+
+    @classmethod
+    def _bit_destuff(cls, data: bytes) -> bytes:
+        """
+        Remove AX.25 bit stuffing: remove 0 after five consecutive 1s.
+        """
+        result = bytearray()
+        ones_count = 0
+        bit_buffer = 0
+        bit_count = 0
+
+        for byte in data:
+            for i in range(8):
+                bit = (byte >> i) & 1
+                bit_buffer |= bit << bit_count
+                bit_count += 1
+
+                if bit == 1:
+                    ones_count += 1
+                else:
+                    ones_count = 0
+
+                if ones_count == 5:
+                    # Next bit should be stuffed 0 - skip it
+                    i += 1  # Skip next bit
+                    ones_count = 0
+                    continue
+
+                if bit_count == 8:
+                    result.append(bit_buffer)
+                    bit_buffer = 0
+                    bit_count = 0
+
+        # Flush
+        if bit_count > 0:
+            result.append(bit_buffer)
+
+        return bytes(result)
 
     @classmethod
     def decode(cls, raw: bytes, config: AX25Config = DEFAULT_CONFIG_MOD8) -> "AX25Frame":
@@ -243,7 +304,7 @@ class AX25Frame:
         offset += 1
 
         pid = None
-        if (control & 0x01 == 0) or (control & 0x03 == 0x03):  # I or UI
+        if (control & 0x01 == 0) or ((control & 0x03) == 0x03 and control != 0xF0):  # I or UI
             pid = destuffed[offset]
             offset += 1
 
@@ -263,19 +324,3 @@ class AX25Frame:
             info=info,
             config=config,
         )
-
-    @staticmethod
-    def _bit_destuff(data: bytes) -> bytes:
-        """Remove bit stuffing."""
-        destuffed = bytearray()
-        ones_count = 0
-        for bit in data:
-            if bit == 1:
-                ones_count += 1
-                if ones_count != 5:
-                    destuffed.append(1)
-            else:
-                if ones_count != 5:
-                    destuffed.append(0)
-                ones_count = 0
-        return bytes(destuffed)
