@@ -12,14 +12,12 @@ Copyright (C) 2025-2026 Kris Kirby, KE4AHR
 
 """
 
-__version__ = "0.5.6"
+__version__ = "0.5.7"
 
 # Core AX.25 functionality
 from .core.framing import (
     AX25Frame,
     fcs_calc,
-    bit_stuff,
-    bit_destuff
 )
 from .core.statemachine import (
     AX25StateMachine,
@@ -60,8 +58,6 @@ __all__ = [
     # Core
     'AX25Frame',
     'fcs_calc',
-    'bit_stuff',
-    'bit_destuff',
     'AX25StateMachine',
     'AX25State',
     
