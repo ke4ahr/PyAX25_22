@@ -29,7 +29,6 @@ from .exceptions import (
     InvalidAddressError,
     InvalidControlFieldError,
     FCSError,
-    BitStuffingError,
     FrameError,
 )
 
@@ -85,8 +84,8 @@ class AX25Address:
 
     callsign: str
     ssid: int = 0
-    c_bit: bool = False          # Command/Response bit
-    h_bit: bool = False          # Has been repeated (digipeater)
+    c_bit: bool = False          # Command/Response bit (bit 6)
+    h_bit: bool = False          # Has been repeated (bit 5)
 
     def __post_init__(self) -> None:
         """Validate and normalize address."""
@@ -111,10 +110,10 @@ class AX25Address:
         - Bits 4-1: SSID
         - Bit 0: Extension (1 = last address)
         """
-        ssid_byte = 0x60  # Reserved bits 7=1, 6=0 initially
-        ssid_byte |= (self.ssid << 1) & 0x1E
-        ssid_byte |= 0x40 if self.c_bit else 0x00  # C bit in position 6
-        ssid_byte |= 0x20 if self.h_bit else 0x00  # H bit in position 5
+        ssid_byte = 0x60  # Bit 7 = 1, bit 6 = 0 initially
+        ssid_byte |= (self.ssid << 1) & 0x1E  # SSID in bits 4-1
+        ssid_byte |= 0x40 if self.c_bit else 0x00  # C bit in bit 6
+        ssid_byte |= 0x20 if self.h_bit else 0x00  # H bit in bit 5
         ssid_byte |= 0x01 if last else 0x00        # Extension bit
 
         return self._call_bytes + bytes([ssid_byte])
@@ -171,8 +170,8 @@ class AX25Frame:
         Encode complete frame with flags, bit stuffing, and FCS.
         """
         # Address field
-        addr_field = self.destination.encode(last=len(self.digipeaters) == 0)
-        addr_field += self.source.encode(last=len(self.digipeaters) == 0)
+        addr_field = self.destination.encode(last=not self.digipeaters)
+        addr_field += self.source.encode(last=not self.digipeaters)
 
         for i, digi in enumerate(self.digipeaters):
             last = i == len(self.digipeaters) - 1
@@ -196,81 +195,56 @@ class AX25Frame:
 
     @staticmethod
     def _bit_stuff(data: bytes) -> bytes:
-        """
-        Apply AX.25 bit stuffing: insert 0 after five consecutive 1s.
-        Operates on byte stream.
-        """
+        """Apply AX.25 bit stuffing: insert 0 after five consecutive 1s."""
         result = bytearray()
         ones_count = 0
-        bit_buffer = 0
-        bit_count = 0
-
         for byte in data:
-            for i in range(8):
-                bit = (byte >> i) & 1
-                bit_buffer |= bit << bit_count
-                bit_count += 1
-
-                if bit == 1:
+            mask = 1
+            for _ in range(8):
+                bit = byte & mask
+                if bit:
+                    result.append(1)
                     ones_count += 1
                     if ones_count == 5:
-                        bit_count += 1  # Insert 0
-                        if bit_count == 8:
-                            result.append(bit_buffer)
-                            bit_buffer = 0
-                            bit_count = 0
+                        result.append(0)
                         ones_count = 0
                 else:
+                    result.append(0)
                     ones_count = 0
-
-                if bit_count == 8:
-                    result.append(bit_buffer)
-                    bit_buffer = 0
-                    bit_count = 0
-
-        # Flush remaining bits
-        if bit_count > 0:
-            result.append(bit_buffer)
-
-        return bytes(result)
+                mask <<= 1
+        # Convert bit list to bytes
+        padded = result + [0] * ((8 - len(result) % 8) % 8)
+        return bytes(padded[i:i+8] for i in range(0, len(padded), 8))
 
     @classmethod
     def _bit_destuff(cls, data: bytes) -> bytes:
-        """
-        Remove AX.25 bit stuffing: remove 0 after five consecutive 1s.
-        """
+        """Remove AX.25 bit stuffing: remove 0 after five consecutive 1s."""
         result = bytearray()
         ones_count = 0
-        bit_buffer = 0
-        bit_count = 0
-
         for byte in data:
-            for i in range(8):
-                bit = (byte >> i) & 1
-                bit_buffer |= bit << bit_count
-                bit_count += 1
-
-                if bit == 1:
+            mask = 1
+            for _ in range(8):
+                bit = byte & mask
+                if ones_count == 5:
+                    if bit == 0:
+                        ones_count = 0
+                        mask <<= 1
+                        continue
+                    else:
+                        raise BitStuffingError("Invalid stuffed bit sequence")
+                if bit:
+                    result.append(1)
                     ones_count += 1
                 else:
+                    result.append(0)
                     ones_count = 0
-
-                if ones_count == 5:
-                    # Next bit should be stuffed 0 - skip it
-                    i += 1  # Skip next bit
-                    ones_count = 0
-                    continue
-
-                if bit_count == 8:
-                    result.append(bit_buffer)
-                    bit_buffer = 0
-                    bit_count = 0
-
-        # Flush
-        if bit_count > 0:
-            result.append(bit_buffer)
-
-        return bytes(result)
+                mask <<= 1
+        # Remove padding if any
+        while result and result[-1] == 0:
+            result.pop()
+        # Convert back to bytes
+        padded = result + [0] * ((8 - len(result) % 8) % 8)
+        return bytes(padded[i:i+8] for i in range(0, len(padded), 8))
 
     @classmethod
     def decode(cls, raw: bytes, config: AX25Config = DEFAULT_CONFIG_MOD8) -> "AX25Frame":
@@ -304,7 +278,7 @@ class AX25Frame:
         offset += 1
 
         pid = None
-        if (control & 0x01 == 0) or ((control & 0x03) == 0x03 and control != 0xF0):  # I or UI
+        if (control & 0x01 == 0) or (control & 0x03 == 0x03):
             pid = destuffed[offset]
             offset += 1
 
