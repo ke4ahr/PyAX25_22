@@ -27,7 +27,6 @@ from .core.statemachine import (
 # Transport interfaces
 from .interfaces.kiss import (
     KISSInterface,
-    SerialKISSInterface,
     TCPKISSInterface
 )
 from .interfaces.kiss_async import (
@@ -62,7 +61,6 @@ __all__ = [
     
     # Interfaces
     'KISSInterface',
-    'SerialKISSInterface',
     'TCPKISSInterface',
     'AsyncKISSInterface',
     'AsyncTCPKISSInterface',
