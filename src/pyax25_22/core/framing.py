@@ -29,6 +29,7 @@ from .exceptions import (
     InvalidAddressError,
     InvalidControlFieldError,
     FCSError,
+    BitStuffingError,
     FrameError,
 )
 
@@ -201,20 +202,21 @@ class AX25Frame:
         for byte in data:
             mask = 1
             for _ in range(8):
-                bit = byte & mask
+                bit = (byte & mask) != 0
+                result.append(1 if bit else 0)
                 if bit:
-                    result.append(1)
                     ones_count += 1
                     if ones_count == 5:
                         result.append(0)
                         ones_count = 0
                 else:
-                    result.append(0)
                     ones_count = 0
                 mask <<= 1
-        # Convert bit list to bytes
-        padded = result + [0] * ((8 - len(result) % 8) % 8)
-        return bytes(padded[i:i+8] for i in range(0, len(padded), 8))
+        # Pad to byte boundary
+        padding = (8 - len(result) % 8) % 8
+        result.extend([0] * padding)
+        # Convert to bytes
+        return bytes([int(''.join(str(b) for b in result[i:i+8]), 2) for i in range(0, len(result), 8)])
 
     @classmethod
     def _bit_destuff(cls, data: bytes) -> bytes:
@@ -224,14 +226,13 @@ class AX25Frame:
         for byte in data:
             mask = 1
             for _ in range(8):
-                bit = byte & mask
+                bit = (byte & mask) != 0
                 if ones_count == 5:
-                    if bit == 0:
-                        ones_count = 0
-                        mask <<= 1
-                        continue
-                    else:
-                        raise BitStuffingError("Invalid stuffed bit sequence")
+                    if bit:
+                        raise BitStuffingError("Invalid stuffed sequence")
+                    ones_count = 0
+                    mask <<= 1
+                    continue
                 if bit:
                     result.append(1)
                     ones_count += 1
@@ -239,12 +240,13 @@ class AX25Frame:
                     result.append(0)
                     ones_count = 0
                 mask <<= 1
-        # Remove padding if any
+        # Remove padding
         while result and result[-1] == 0:
             result.pop()
-        # Convert back to bytes
-        padded = result + [0] * ((8 - len(result) % 8) % 8)
-        return bytes(padded[i:i+8] for i in range(0, len(padded), 8))
+        # Convert to bytes
+        padding = (8 - len(result) % 8) % 8
+        result.extend([0] * padding)
+        return bytes([int(''.join(str(b) for b in result[i:i+8]), 2) for i in range(0, len(result), 8)])
 
     @classmethod
     def decode(cls, raw: bytes, config: AX25Config = DEFAULT_CONFIG_MOD8) -> "AX25Frame":

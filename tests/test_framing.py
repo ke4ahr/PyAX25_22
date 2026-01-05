@@ -64,30 +64,38 @@ def test_address_encoding(basic_addresses):
     """Test AX25Address encoding."""
     dest, src = basic_addresses
 
-    # Basic encoding
-    assert dest.encode(last=False) == bytes([ord('D')<<1, ord('E')<<1, ord('S')<<1, ord('T')<<1, ord(' ')<<1, ord(' ')<<1, 0x60 | (1<<1)])
-    assert src.encode(last=True) == bytes([ord('S')<<1, ord('R')<<1, ord('C')<<1, ord(' ')<<1, ord(' ')<<1, ord(' ')<<1, 0x61 | (2<<1)])
+    # Basic encoding (non-last and last address)
+    # DEST-1 (not last): SSID byte = 0x62 (SSID=1, extension=0, reserved=1, C=0, H=0)
+    assert dest.encode(last=False)[-1] == 0x62
+    # SRC-2 (last): SSID byte = 0x65 (SSID=2, extension=1, reserved=1, C=0, H=0)
+    assert src.encode(last=True)[-1] == 0x65
 
     # With C-bit and H-bit
     addr = AX25Address("TEST", ssid=3, c_bit=True, h_bit=True)
     encoded = addr.encode(last=True)
-    assert encoded[-1] & 0xE0 == 0xE0  # C and H bits set
+    # SSID byte: reserved=1 (bit7), C=1 (bit6), H=1 (bit5), SSID=3 (bits4-1), extension=1 (bit0) = 0xE7
+    assert encoded[-1] == 0xE7
 
 
 def test_address_decoding():
     """Test AX25Address decoding."""
     # Basic decode
-    data = bytes([ord('D')<<1, ord('E')<<1, ord('S')<<1, ord('T')<<1, ord(' ')<<1, ord(' ')<<1, 0x61 | (1<<1)])
+    data = b'\\x88\\x8a\\xa6\\xa8@@\\x62'  # DEST-1 not last
     addr, is_last = AX25Address.decode(data)
     assert addr.callsign == "DEST"
     assert addr.ssid == 1
-    assert is_last == True
+    assert addr.c_bit == False
+    assert addr.h_bit == False
+    assert is_last == False
 
-    # With bits
-    data_with_bits = bytes([ord('T')<<1, ord('E')<<1, ord('S')<<1, ord('T')<<1, ord(' ')<<1, ord(' ')<<1, 0xE0 | (3<<1)])
-    addr, _ = AX25Address.decode(data_with_bits)
+    # Last address with C and H bits
+    data = b'\\x9c\\x9c\\x9c\\x9c@@\\xE7'  # TEST-3 last, C=1, H=1
+    addr, is_last = AX25Address.decode(data)
+    assert addr.callsign == "TEST"
+    assert addr.ssid == 3
     assert addr.c_bit == True
     assert addr.h_bit == True
+    assert is_last == True
 
     # Invalid length
     with pytest.raises(InvalidAddressError):
@@ -111,12 +119,12 @@ def test_fcs_calculation():
 
 def test_bit_stuffing():
     """Test bit stuffing and destuffing round-trip."""
-    test_data = bytes.fromhex("7E 7E 7E")  # Multiple flags - should stuff
+    test_data = bytes.fromhex("7E 7E 7E")  # Multiple flags - should be stuffed
     stuffed = AX25Frame._bit_stuff(test_data)
     destuffed = AX25Frame._bit_destuff(stuffed)
     assert destuffed == test_data
 
-    # 5 ones
+    # Five 1s case
     five_ones = bytes([0x1F])  # 00011111
     stuffed = AX25Frame._bit_stuff(five_ones)
     assert len(stuffed) > len(five_ones)  # Extra 0 inserted
@@ -169,7 +177,10 @@ def test_i_frame():
     """Test I-frame specific encoding."""
     # Mod 8 I-frame N(S)=3, N(R)=5, P=1
     control = (3 << 1) | (5 << 5) | 0x10
-    frame = AX25Frame(control=control, pid=0xF0, config=DEFAULT_CONFIG_MOD8)
+    # Create addresses for required args
+    dest = AX25Address("DEST")
+    src = AX25Address("SRC")
+    frame = AX25Frame(destination=dest, source=src, control=control, pid=0xF0, config=DEFAULT_CONFIG_MOD8)
     encoded = frame.encode()
 
     decoded = AX25Frame.decode(encoded)
@@ -178,10 +189,13 @@ def test_i_frame():
 
 def test_extended_mod128():
     """Test modulo 128 extended control field."""
+    from pyax25_22.core.config import AX25Config
     config_mod128 = AX25Config(modulo=128)
     # Extended I-frame N(S)=100, N(R)=120, P=1
     control = (100 << 1) | (120 << 9) | 0x100  # 16-bit control
-    frame = AX25Frame(control=control, pid=0xF0, config=config_mod128)
+    dest = AX25Address("DEST")
+    src = AX25Address("SRC")
+    frame = AX25Frame(destination=dest, source=src, control=control, pid=0xF0, config=config_mod128)
     encoded = frame.encode()
 
     decoded = AX25Frame.decode(encoded)
