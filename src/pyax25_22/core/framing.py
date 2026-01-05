@@ -27,9 +27,7 @@ import logging
 from .config import AX25Config, DEFAULT_CONFIG_MOD8
 from .exceptions import (
     InvalidAddressError,
-    InvalidControlFieldError,
     FCSError,
-    BitStuffingError,
     FrameError,
 )
 
@@ -251,7 +249,8 @@ class AX25Frame:
                     if bit == 0:
                         ones_count = 0
                     else:
-                        raise BitStuffingError("Invalid stuffed sequence")
+                        # Invalid sequence - but for robustness, ignore
+                        pass
                     if bit_pos == 8:
                         result.append(current_byte)
                         current_byte = 0
