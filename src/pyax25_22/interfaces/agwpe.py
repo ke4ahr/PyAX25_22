@@ -43,7 +43,7 @@ logger = logging.getLogger(__name__)
 # AGWPE Header format (36 bytes)
 # int Port (4 bytes): LOWORD = port index (0-first), HIWORD reserved
 # int DataKind (4 bytes): LOWORD = kind (ASCII char code), HIWORD special use (e.g., for 'Y' reply)
-# char CallFrom[10]: NULL-terminated callsign (e.g., "SV2AGW-12\0")
+# char CallFrom[10]: NULL-terminated callsign (e.g., "SV2AGW-12\\0")
 # char CallTo[10]: NULL-terminated callsign
 # int DataLen (4 bytes): Length of data field
 # int USER (4 bytes): Reserved/undefined
@@ -51,29 +51,29 @@ HEADER_FMT = '<II10s10sII'
 HEADER_SIZE = struct.calcsize(HEADER_FMT)
 
 # DataKind values (ASCII chars)
-DATAKIND_CONNECTED_DATA = 'D'    # Data from connected station
-DATAKIND_UNPROTO_MONITOR = 'U'   # Unproto monitor data
-DATAKIND_TX_MONITOR = 'T'        # TX data monitor
-DATAKIND_MONITOR_HEADER = 'S'    # Monitor header only
-DATAKIND_MONITOR_FULL = 'I'      # Monitor header + data
-DATAKIND_NEW_CONNECTION = 'c'    # New connection established
-DATAKIND_DISCONNECT = 'd'        # Disconnect or retry out
-DATAKIND_HEARD_LIST = 'H'        # Heard list (line by line)
-DATAKIND_REGISTRATION = 'X'      # Registration reply (success/failure)
-DATAKIND_OUTSTANDING = 'Y'       # Outstanding frames in queue
-DATAKIND_PORT_CAPABILITIES = 'g' # Radio port capabilities
-DATAKIND_VERSION = 'R'           # AGWPE version info
-DATAKIND_RAW_FRAMES = 'k'        # Raw AX25 frames
-DATAKIND_MONITORING = 'm'        # Monitoring control
+DATAKIND_CONNECTED_DATA = 'D'  # Data from connected station
+DATAKIND_UNPROTO_MONITOR = 'U'  # Unproto monitor data
+DATAKIND_TX_MONITOR = 'T'  # TX data monitor
+DATAKIND_MONITOR_HEADER = 'S'  # Monitor header only
+DATAKIND_MONITOR_FULL = 'I'  # Monitor header + data
+DATAKIND_NEW_CONNECTION = 'c'  # New connection established
+DATAKIND_DISCONNECT = 'd'  # Disconnect or retry out
+DATAKIND_HEARD_LIST = 'H'  # Heard list (line by line)
+DATAKIND_REGISTRATION = 'X'  # Registration reply (success/failure)
+DATAKIND_OUTSTANDING = 'Y'  # Outstanding frames in queue
+DATAKIND_PORT_CAPABILITIES = 'g'  # Radio port capabilities
+DATAKIND_VERSION = 'R'  # AGWPE version info
+DATAKIND_RAW_FRAMES = 'k'  # Raw AX25 frames
+DATAKIND_MONITORING = 'm'  # Monitoring control
 
 # Send kinds
-SENDKIND_CONNECT_NO_DIGI = 'c'   # Connect without digis
-SENDKIND_CONNECT_DIGI = 'v'      # Connect with digis
-SENDKIND_DISCONNECT = 'd'        # Disconnect
-SENDKIND_DATA = 'D'              # Send data to connected station
-SENDKIND_UNPROTO = 'U'           # Send unproto (beacon/CQ)
-SENDKIND_PORT_INFO = 'P'         # Port information
-SENDKIND_UNPROTO_VIA = 'V'       # Unproto with via
+SENDKIND_CONNECT_NO_DIGI = 'c'  # Connect without digis
+SENDKIND_CONNECT_DIGI = 'v'  # Connect with digis
+SENDKIND_DISCONNECT = 'd'  # Disconnect
+SENDKIND_DATA = 'D'  # Send data to connected station
+SENDKIND_UNPROTO = 'U'  # Send unproto (beacon/CQ)
+SENDKIND_PORT_INFO = 'P'  # Port information
+SENDKIND_UNPROTO_VIA = 'V'  # Unproto with via
 
 class AGWPEConnectionError(AGWPEError):
     """Specific error for connection issues."""
@@ -83,12 +83,12 @@ class AGWPEFrameError(AGWPEError):
     """Specific error for frame parsing issues."""
     pass
 
-class AGWPEClient:
+class AGWPEInterface:
     """
     Synchronous AGWPE TCP/IP API client with threaded background reading.
 
     Usage:
-        client = AGWPEClient()
+        client = AGWPEInterface()
         client.connect()
         client.register_callsign("KE4AHR-1")
         client.enable_monitoring()
@@ -114,7 +114,7 @@ class AGWPEClient:
         self._thread: Optional[threading.Thread] = None
         self._running = False
         self._callbacks: Dict[str, Callable] = {}
-        logger.info(f"AGWPEClient initialized for {host}:{port}")
+        logger.info(f"AGWPEInterface initialized for {host}:{port}")
 
     def connect(self) -> None:
         """
@@ -224,15 +224,15 @@ class AGWPEClient:
         Args:
             port: Radio port index
             data_kind: Single ASCII char (e.g., 'U' for unproto)
-            call_from: Source callsign (up to 9 chars + \0)
-            call_to: Destination callsign (up to 9 chars + \0)
+            call_from: Source callsign (up to 9 chars + \\0)
+            call_to: Destination callsign (up to 9 chars + \\0)
             data: Payload bytes
         """
         if not self.sock:
             raise AGWPEConnectionError("Not connected")
 
-        call_from_b = call_from.encode('ascii').ljust(10, b'\0')
-        call_to_b = call_to.encode('ascii').ljust(10, b'\0')
+        call_from_b = call_from.encode('ascii').ljust(10, b'\\0')
+        call_to_b = call_to.encode('ascii').ljust(10, b'\\0')
         data_len = len(data)
         user_reserved = 0  # Always 0
 
@@ -261,8 +261,8 @@ class AGWPEClient:
                 # Unpack header
                 port, data_kind_int, call_from_b, call_to_b, data_len, user = struct.unpack(HEADER_FMT, header_data)
                 data_kind = chr(data_kind_int)
-                call_from = call_from_b.rstrip(b'\0').decode('ascii', errors='ignore')
-                call_to = call_to_b.rstrip(b'\0').decode('ascii', errors='ignore')
+                call_from = call_from_b.rstrip(b'\\0').decode('ascii', errors='ignore')
+                call_to = call_to_b.rstrip(b'\\0').decode('ascii', errors='ignore')
 
                 # Read data
                 data = self._recv_exact(data_len) if data_len > 0 else b''
