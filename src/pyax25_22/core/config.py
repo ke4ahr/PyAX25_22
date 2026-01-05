@@ -86,9 +86,9 @@ class AX25Config:
             )
 
         # Timer bounds
-        if not (0.1 <= self.t1_timeout <= 300.0):
+        if not (0.0 <= self.t1_timeout <= 300.0):
             raise ConfigurationError(
-                f"t1_timeout must be 0.1-300.0 seconds, got {self.t1_timeout}"
+                f"t1_timeout must be 0.0-300.0 seconds, got {self.t1_timeout}"
             )
         if not (10.0 <= self.t3_timeout <= 3600.0):
             raise ConfigurationError(
@@ -96,9 +96,9 @@ class AX25Config:
             )
 
         # Retry count
-        if not (1 <= self.retry_count <= 255):
+        if not (0 <= self.retry_count <= 255):
             raise ConfigurationError(
-                f"retry_count must be 1-255, got {self.retry_count}"
+                f"retry_count must be 0-255, got {self.retry_count}"
             )
 
         # CSMA parameters
@@ -130,7 +130,7 @@ DEFAULT_CONFIG_MOD8 = AX25Config(
 
 DEFAULT_CONFIG_MOD128 = AX25Config(
     modulo=128,
-    max_frame=2048,
+    max_frame=256,
     window_size=63,
     t1_timeout=15.0,
     t3_timeout=300.0,
@@ -152,8 +152,8 @@ CONFIG_PACSAT_BROADCAST = AX25Config(
     modulo=8,
     max_frame=256,
     window_size=1,  
-    t1_timeout=10.0, 
-    retry_count=1,   
-    tx_delay=0.3,   
+    t1_timeout=0, 
+    retry_count=0, 
+    tx_delay=0.3,
 )
 
