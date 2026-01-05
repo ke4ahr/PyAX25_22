@@ -249,8 +249,7 @@ class AX25Frame:
                     if bit == 0:
                         ones_count = 0
                     else:
-                        # Invalid sequence - but for robustness, ignore
-                        pass
+                        raise BitStuffingError("Invalid stuffed sequence")
                     if bit_pos == 8:
                         result.append(current_byte)
                         current_byte = 0
