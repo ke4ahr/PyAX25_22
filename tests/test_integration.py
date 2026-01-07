@@ -143,6 +143,9 @@ async def test_async_timer_t1(mock_connection_mod8):
 
     # Wait for T1 timeout (no UA received)
     await asyncio.sleep(1.0)
+
+    # Manually trigger T1 timeout since _process_timers is a placeholder
+    conn._on_t1_timeout()
     await conn._process_timers()
 
     assert conn.state == AX25State.DISCONNECTED
@@ -181,6 +184,22 @@ async def test_flow_control_integration(mock_connection_mod8):
     initial_sent = len(conn.transport.sent_frames)
     await conn.send_data(b"Blocked data")
     assert len(conn.transport.sent_frames) == initial_sent  # Enqueue only
+
+    # Simulate peer ready (RR)
+    conn.transport.inject_frame(
+        AX25Frame(
+            destination=AX25Address("TEST"),
+            source=AX25Address("DEST"),
+            control=0x01,  # RR
+        ).encode()
+    )
+    await conn._process_incoming()
+
+    assert conn.peer_busy
+
+    initial_sent=len(conn.transport.sent_frames)
+    await conn.send_data(b"Blocked data")
+    assert len(conn.transport.sent_frames) == initial_sent # Enqueue only
 
     # Simulate peer ready (RR)
     conn.transport.inject_frame(

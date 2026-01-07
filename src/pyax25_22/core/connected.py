@@ -217,7 +217,7 @@ class AX25Connection:
         elif cmd == 0x63:  # UA response
             if self.sm.state == AX25State.AWAITING_CONNECTION:
                 self.sm.transition("UA_received")
-                self.timers.stop_t1()
+                self.timers.stop_t1_sync()
                 logger.info("Connection established")
 
         elif cmd == 0x43:  # DISC
