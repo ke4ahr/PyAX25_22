@@ -32,6 +32,7 @@ def mock_connection_mod8():
         local_addr=local,
         remote_addr=remote,
         config=DEFAULT_CONFIG_MOD8,
+        initiate=True,
     )
     # Replace transport with mock
     conn.transport = MockTransport()
@@ -48,6 +49,8 @@ def mock_connection_mod128():
         local_addr=local,
         remote_addr=remote,
         config=config,
+        initiate=True,
+    )
     )
     conn.transport = MockTransport()
     return conn
@@ -71,7 +74,7 @@ class MockTransport:
     def inject_frame(self, frame: bytes):
         self.received_frames.append(frame)
 
-@pytest_mark.asyncio
+@pytest.mark.asyncio
 async def test_full_connected_lifecycle(mock_connection_mod8):
     """Test complete connection lifecycle."""
     conn = mock_connection_mod8
@@ -85,6 +88,7 @@ async def test_full_connected_lifecycle(mock_connection_mod8):
         destination=AX25Address("TEST"),
         source=AX25Address("DEST"),
         control=0x63,  # UA
+    )
     ).encode()
     conn.transport.inject_frame(ua_frame)
     await conn._process_incoming()

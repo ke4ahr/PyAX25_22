@@ -55,11 +55,10 @@ class MockSerial:
 
 def test_kiss_multi_drop_command_byte():
     """Test multi-drop KISS command byte encoding."""
-    serial = MockSerial(()
+    serial = MockSerial()
 
-    with patch('serial.Serial', return_value=serial):
-        transport = KISSInterface("mock_port")
-        transport.connect()
+    transport = KISSInterface("mock_port")
+    transport.serial = serial
 
     # High nibble = port/command
     frame = AX25Frame(
@@ -69,12 +68,6 @@ def test_kiss_multi_drop_command_byte():
         info=b"test",
     )
     encoded = frame.encode()
-
-    # Create KISS interface and connect it
-    serial = MockSerial()
-    transport = KISSInterface("mock_port")
-    transport.serial = serial  # Inject mock serial
-    transport.connect()
 
     # Send frame and check the output
     transport.send_frame(frame)
