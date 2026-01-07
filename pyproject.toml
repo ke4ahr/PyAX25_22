@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pyax25-22"
-version = "0.5.35"
+version = "0.5.36"
 description = "Pure Python implementation of AX.25 v2.2 Layer 2 protocol for amateur radio"
 readme = "README.md"
 authors = [{ name = "Kris Kirby, KE4AHR" }]
