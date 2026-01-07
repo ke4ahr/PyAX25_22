@@ -21,13 +21,17 @@ from .framing import (
     fcs_calc,
     verify_fcs,
 )
-from .connected import AX25Connection
 from .statemachine import AX25StateMachine, AX25State
-from .config import AX25Config, DEFAULT_CONFIG_MOD8, DEFAULT_CONFIG_MOD128
 from .flow_control import AX25FlowControl
 from .timers import AX25Timers
 from .negotiation import build_xid_frame, parse_xid_frame, negotiate_config
 from .validation import validate_frame_structure, full_validation
+
+# Connection class is the main user-facing API
+from .connected import AX25Connection
+
+# Configuration
+from .config import AX25Config, DEFAULT_CONFIG_MOD8, DEFAULT_CONFIG_MOD128
 
 # Exception hierarchy
 from .exceptions import (
@@ -48,7 +52,7 @@ from .exceptions import (
 )
 
 # Version
-__version__ = "0.5.43"
+__version__ = "0.5.44"
 
 # Public API list – explicitly exported symbols
 __all__ = [
@@ -105,4 +109,4 @@ __all__ = [
 if __name__ == "__main__":
     print(f"PyAX25_22 core module v{__version__}")
     print("This is a library module. Import from your application:")
-    print("    from pyax25_22.core import AX25Frame, AX25Connection")
+    print(" from pyax25_22.core import AX25Frame, AX25Connection")
