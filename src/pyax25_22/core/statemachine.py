@@ -1,8 +1,8 @@
 # tests/test_statemachine.py
 
-Unit tests for the AX.25 state machine.
+#Unit tests for the AX.25 state machine.
 
-Covers all states and transitions per AX.25 v2.2 SDL diagrams.
+#Covers all states and transitions per AX.25 v2.2 SDL diagrams.
 
 
     import pytest
