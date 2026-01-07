@@ -43,7 +43,7 @@ logger = logging.getLogger(__name__)
 # AGWPE Header format (36 bytes)
 # int Port (4 bytes): LOWORD = port index (0-first), HIWORD reserved
 # int DataKind (4 bytes): LOWORD = kind (ASCII char code), HIWORD special use (e.g., for 'Y' reply)
-# char CallFrom[10]: NULL-terminated callsign (e.g., "SV2AGW-12\\0")
+# char CallFrom[10]: NULL-terminated callsign (e.g., "SV2AGW-12\0")
 # char CallTo[10]: NULL-terminated callsign
 # int DataLen (4 bytes): Length of data field
 # int USER (4 bytes): Reserved/undefined
@@ -224,15 +224,15 @@ class AGWPEInterface:
         Args:
             port: Radio port index
             data_kind: Single ASCII char (e.g., 'U' for unproto)
-            call_from: Source callsign (up to 9 chars + \\0)
-            call_to: Destination callsign (up to 9 chars + \\0)
+            call_from: Source callsign (up to 9 chars + \0)
+            call_to: Destination callsign (up to 9 chars + \0)
             data: Payload bytes
         """
         if not self.sock:
             raise AGWPEConnectionError("Not connected")
 
-        call_from_b = call_from.encode('ascii').ljust(10, b'\\0')
-        call_to_b = call_to.encode('ascii').ljust(10, b'\\0')
+        call_from_b = call_from.encode('ascii').ljust(10, b'\0')
+        call_to_b = call_to.encode('ascii').ljust(10, b'\0')
         data_len = len(data)
         user_reserved = 0  # Always 0
 
@@ -261,8 +261,8 @@ class AGWPEInterface:
                 # Unpack header
                 port, data_kind_int, call_from_b, call_to_b, data_len, user = struct.unpack(HEADER_FMT, header_data)
                 data_kind = chr(data_kind_int)
-                call_from = call_from_b.rstrip(b'\\0').decode('ascii', errors='ignore')
-                call_to = call_to_b.rstrip(b'\\0').decode('ascii', errors='ignore')
+                call_from = call_from_b.rstrip(b'\0').decode('ascii', errors='ignore')
+                call_to = call_to_b.rstrip(b'\0').decode('ascii', errors='ignore')
 
                 # Read data
                 data = self._recv_exact(data_len) if data_len > 0 else b''

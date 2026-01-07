@@ -16,10 +16,12 @@ Covers:
 Uses mocks for serial/socket to test without hardware.
 """
 
+import socket
 import pytest
 import struct
 from unittest.mock import Mock, patch
 
+from pyax25_22.core.config import DEFAULT_CONFIG_MOD8
 from pyax25_22.interfaces.kiss import KISSInterface, FEND, FESC, TFEND, TFESC
 from pyax25_22.interfaces.agwpe import AGWPEInterface, HEADER_FMT, HEADER_SIZE
 from pyax25_22.interfaces.transport import validate_frame_for_transport
@@ -101,6 +103,7 @@ def test_kiss_send_receive_mock(mock_serial):
     """Test KISS send/receive with mock serial."""
     with patch('serial.Serial', return_value=mock_serial):
         kiss = KISSInterface("mock_port")
+        kiss.config = DEFAULT_CONFIG_MOD8 # added 2026-01-07
         kiss.connect()
 
         frame = AX25Frame(destination=AX25Address("TEST"), source=AX25Address("KE4AHR"))
@@ -113,7 +116,7 @@ def test_kiss_send_receive_mock(mock_serial):
         kiss_frame = bytes([FEND, 0x00]) + encoded + bytes([FEND])
         mock_serial.read.return_value = kiss_frame
 
-        tnc_addr, port, recv_frame = kiss.receive()
+        tnc_addr, port, recv_frame = kiss.receive(timeout=30) # Add timeout 2026-01-07
         assert tnc_addr == 0
         assert recv_frame.info == b""
 
@@ -126,6 +129,9 @@ def test_agwpe_send_receive_mock(mock_socket):
         agwpe = AGWPEInterface()
         agwpe.connect()
 
+        # Fix the string encoding issue
+        call_from = "KE4AHR"
+        call_to = "APRS"
         agwpe.send_frame(1, 'D', 'KE4AHR', 'APRS', b'test')
 
         mock_socket.sendall.assert_called()
@@ -134,7 +140,7 @@ def test_agwpe_send_receive_mock(mock_socket):
         header = struct.pack(HEADER_FMT, 1, ord('D'), b'KE4AHR   \\x00', b'APRS     \\x00', 4, 0)
         mock_socket.recv.side_effect = [header, b'test']
 
-        port, kind, fr, to, data = agwpe.receive()
+        port, kind, fr, to, data = agwpe.receive(timeout=30) # Add timeout 2026-01-07
         assert port == 1
         assert kind == 'D'
         assert data == b'test'
@@ -148,6 +154,7 @@ def test_kiss_error_handling(mock_serial):
 
     with patch('serial.Serial', return_value=mock_serial):
         kiss = KISSInterface("mock_port")
+        kiss.config = DEFAULT_CONFIG_MOD8 # Added 2026-01-07
         kiss.connect()
 
         frame = AX25Frame(destination=AX25Address("TEST"), source=AX25Address("TEST"))
@@ -159,7 +166,7 @@ def test_kiss_error_handling(mock_serial):
 
 def test_agwpe_error_handling(mock_socket):
     """Test AGWPE error cases."""
-    mock_socket.sendall.side_effect = socket.error("Mock error")
+    mock_socket.sendall.side_effect = socket.error("Mock error") # socket imported 2026-01-07 top of file
 
     with patch('socket.socket', return_value=mock_socket):
         agwpe = AGWPEInterface()
