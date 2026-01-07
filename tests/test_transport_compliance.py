@@ -16,7 +16,8 @@ import pytest
 from unittest.mock import Mock, patch
 import struct
 
-from pyax25_22.interfaces.kiss import KISSTransport, KISSFrameType
+from pyax25_22.core.config import DEFAULT_CONFIG_MOD8
+from pyax25_22.interfaces.kiss import KISSInterface
 from pyax25_22.interfaces.agwpe import AGWPETransport
 from pyax25_22.core.framing import AX25Frame, AX25Address
 
@@ -53,7 +54,7 @@ def test_kiss_multi_drop_command_byte():
     )
     encoded = frame.encode()
 
-    kiss_frame = KISSTransport.encode_frame(encoded, port=1, command=KISSFrameType.DATA)
+    kiss_frame = KISSInterface.encode_frame(encoded, port=1, command=KISSFrameType.DATA)
     # First byte: FEND
     # Second byte: port<<4 | command (0x10 | 0x00 = 0x10 for port 1, data)
     assert kiss_frame[1] == 0x10
@@ -84,7 +85,7 @@ def test_agwpe_header_format():
 def test_transport_validation_kiss():
     """Test KISS transport round-trip validation."""
     serial = MockSerial()
-    transport = KISSTransport(serial)
+    transport = KISSInterface(serial)
 
     frame = AX25Frame(
         destination=AX25Address("APRS"),
@@ -132,7 +133,7 @@ def test_transport_validation_agwpe():
 def test_kiss_send_receive_mock():
     """Test full KISS send/receive with mock serial and delays."""
     serial = MockSerial()
-    transport = KISSTransport(serial)
+    transport = KISSInterface(serial)
 
     # Send UI frame
     frame = AX25Frame(
@@ -156,7 +157,7 @@ def test_kiss_send_receive_mock():
         source=AX25Address("TEST"),
         control=0x01,  # RR
     ).encode()
-    kiss_response = KISSTransport.encode_frame(response)
+    kiss_response = KISSInterface.encode_frame(response)
     serial.in_buffer = kiss_response
 
     received = transport.receive_frame()

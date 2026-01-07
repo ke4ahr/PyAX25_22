@@ -25,9 +25,11 @@ from pyax25_22.core.config import AX25Config, DEFAULT_CONFIG_MOD8, DEFAULT_CONFI
 @pytest.fixture
 def mock_connection_mod8():
     """Mock connection with modulo 8."""
+    local = AX25Address("TEST")
+    remote = AX25Address("DEST")
     conn = AX25Connection(
-        callsign="TEST",
-        destination="DEST",
+        local_addr=local,
+        remote_addr=remote,
         config=DEFAULT_CONFIG_MOD8,
     )
     # Replace transport with mock
@@ -39,9 +41,11 @@ def mock_connection_mod8():
 def mock_connection_mod128():
     """Mock connection with modulo 128."""
     config = AX25Config(modulo=128, window_size=63)
+    local = AX25Address("TEST")
+    remote = AX25Address("DEST")
     conn = AX25Connection(
-        callsign="TEST",
-        destination="DEST",
+        local_addr=local,
+        remote_addr=remote,
         config=config,
     )
     conn.transport = MockTransport()
