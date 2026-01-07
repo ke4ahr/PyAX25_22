@@ -134,7 +134,7 @@ class AX25Connection:
         )
 
         self._send_frame(disc_frame)
-        self.timers.start_t1(self._on_t1_timeout)
+        self.timers.start_t1_sync(self._on_t1_timeout)
         logger.info("Disconnection request sent (DISC)")
         return disc_frame
 
