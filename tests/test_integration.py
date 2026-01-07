@@ -16,12 +16,12 @@ Covers:
 import pytest
 import pytest_asyncio
 import time
+import asyncio
 
 from pyax25_22.core.framing import AX25Frame, AX25Address
 from pyax25_22.core.statemachine import AX25StateMachine, AX25State
 from pyax25_22.core.connected import AX25Connection
 from pyax25_22.core.config import AX25Config, DEFAULT_CONFIG_MOD8, DEFAULT_CONFIG_MOD128
-
 
 @pytest.fixture
 def mock_connection_mod8():
@@ -38,7 +38,6 @@ def mock_connection_mod8():
     conn.transport = MockTransport()
     return conn
 
-
 @pytest.fixture
 def mock_connection_mod128():
     """Mock connection with modulo 128."""
@@ -53,7 +52,6 @@ def mock_connection_mod128():
     )
     conn.transport = MockTransport()
     return conn
-
 
 class MockTransport:
     """Simple mock transport for integration testing."""
@@ -72,7 +70,6 @@ class MockTransport:
 
     def inject_frame(self, frame):
         self.received_frames.append(frame)
-
 
 @pytest.mark.asyncio
 async def test_full_connected_lifecycle(mock_connection_mod8):
@@ -95,7 +92,7 @@ async def test_full_connected_lifecycle(mock_connection_mod8):
     assert conn.state == AX25State.CONNECTED
 
     # Send data
-    await conn.send(b"Hello")
+    await conn.send_data(b"Hello")
     assert len(conn.transport.sent_frames) > 0
 
     # Simulate ACK
@@ -121,7 +118,6 @@ async def test_full_connected_lifecycle(mock_connection_mod8):
     await conn._process_incoming()
 
     assert conn.state == AX25State.DISCONNECTED
-
 
 @pytest.mark.asyncio
 async def test_async_timer_t1(mock_connection_mod8):
@@ -151,7 +147,6 @@ async def test_async_timer_t1(mock_connection_mod8):
 
     assert conn.state == AX25State.DISCONNECTED
     assert len(conn.transport.sent_frames) >= conn.config.retry_count  # Retries sent
-
 
 @pytest.mark.asyncio
 async def test_flow_control_integration(mock_connection_mod8):
@@ -184,7 +179,7 @@ async def test_flow_control_integration(mock_connection_mod8):
 
     # Should not send new I-frames while busy
     initial_sent = len(conn.transport.sent_frames)
-    await conn.send(b"Blocked data")
+    await conn.send_data(b"Blocked data")
     assert len(conn.transport.sent_frames) == initial_sent  # Enqueue only
 
     # Simulate peer ready (RR)
@@ -200,7 +195,6 @@ async def test_flow_control_integration(mock_connection_mod8):
     assert not conn.peer_busy
     # Data should now be sent
     assert len(conn.transport.sent_frames) > initial_sent
-
 
 @pytest.mark.asyncio
 async def test_mod128_lifecycle(mock_connection_mod128):
@@ -219,7 +213,7 @@ async def test_mod128_lifecycle(mock_connection_mod128):
     await conn._process_incoming()
 
     assert conn.state == AX25State.CONNECTED
-    assert conn.modulo == 128
+    assert conn.config.modulo == 128
 
     await conn.disconnect()
     assert conn.state == AX25State.AWAITING_RELEASE

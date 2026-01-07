@@ -210,18 +210,18 @@ class AX25Connection:
         p_f = bool(frame.control & 0x10)
 
         if cmd in (0x2F, 0x6F):  # SABM/SABME
-            self.sm.transition("SABM" if cmd == 0x2F else "SABME")
+            self.sm.transition("SABM_received" if cmd == 0x2F else "SABME_received")
             self.config = AX25Config(modulo=8 if cmd == 0x2F else 128)
             self._send_ua()
 
         elif cmd == 0x63:  # UA response
             if self.sm.state == AX25State.AWAITING_CONNECTION:
-                self.sm.transition("UA")
+                self.sm.transition("UA_received")
                 self.timers.stop_t1()
                 logger.info("Connection established")
 
         elif cmd == 0x43:  # DISC
-            self.sm.transition("DISC")
+            self.sm.transition("DISC_received")
             self._send_ua()
             logger.info("Connection disconnected by peer")
 
