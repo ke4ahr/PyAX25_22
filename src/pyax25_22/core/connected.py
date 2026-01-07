@@ -325,23 +325,22 @@ class AX25Connection:
         """Retransmit specific frame after SREJ."""
         logger.warning(f"SREJ received - retransmitting frame {nr}")
 
-@property
-def state(self):
-    """Get the current state from the state machine."""
-    return self.sm.state
+    @property
+    def state(self):
+        """Get the current state from the state machine."""
+        return self.sm.state
 
-async def _process_incoming(self):
-    """Process incoming frames from the transport."""
-    if self.transport:
-        frame_data = self.transport.receive_frame()
-        if frame_data:
-            frame = AX25Frame.decode(frame_data, self.config)
-            self.process_frame(frame)
+    async def _process_incoming(self):
+        """Process incoming frames from the transport."""
+        if self.transport:
+            frame_data = self.transport.receive_frame()
+            if frame_data:
+                frame = AX25Frame.decode(frame_data, self.config)
+                self.process_frame(frame)
 
-async def _process_timers(self):
-    """Process any pending timer events."""
-    # The timers will call their callbacks automatically
-    # This is just a placeholder for the test interface
-    pass
-
+    async def _process_timers(self):
+        """Process any pending timer events."""
+        # The timers will call their callbacks automatically
+        # This is just a placeholder for the test interface
+        pass
 
