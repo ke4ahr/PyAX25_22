@@ -197,4 +197,4 @@ Covers all states and transitions per AX.25 v2.2 SDL diagrams.
     def test_modulo_mask(sm_mod8, sm_mod128):
         """Modulo mask is correct."""
         assert sm_mod8.modulo_mask == 0x07
-        assert sm_mod128.modulo_mask == 0x7F"
+        assert sm_mod128.modulo_mask == 0x7F
