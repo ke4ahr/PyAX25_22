@@ -138,8 +138,8 @@ async def test_async_timer_t1(mock_connection_mod8):
     tx_tail=conn.config.tx_tail,
     persistence=conn.config.persistence,
     slot_time=conn.config.slot_time
-)
-conn.config = new_config
+    )
+    conn.config = new_config
 
     await conn.connect()
     assert conn.state == AX25State.AWAITING_CONNECTION
