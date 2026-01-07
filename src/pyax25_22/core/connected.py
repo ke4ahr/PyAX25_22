@@ -88,6 +88,9 @@ class AX25Connection:
         self.negotiated_config: Optional[AX25Config] = None
         self.xid_pending: bool = False
 
+        # Retry counter
+        self.retry_count: int = 0
+
         if initiate:
             self.sm._layer_3_initiated = True
             self.sm.transition("connect_request")
@@ -146,7 +149,7 @@ class AX25Connection:
             raise FrameError(f"Data exceeds N1={self.config.max_frame}")
 
         self.outgoing_queue.append(data)
-        self._transmit_pending()
+        await self._transmit_pending()
         logger.debug(f"Queued {len(data)} bytes for transmission")
 
     async def _transmit_pending(self) -> None:
@@ -204,13 +207,6 @@ class AX25Connection:
 
         # Update T3 on any valid frame
         self.timers.start_t3_sync(lambda: logger.warning("T3 idle timeout"))
-    
-    
-    def _on_t1_timeout(self) -> None:
-        """Handle T1 expiration."""
-        logger.warning("T1 timeout - initiating recovery")
-        self.sm.transition("T1_timeout")  # Fixed: changed from "timeout" to "T1_timeout"
-        self._retransmit_all()
 
     def _handle_u_frame(self, frame: AX25Frame) -> None:
         cmd = frame.control & ~0x10  # Remove P/F bit
@@ -221,11 +217,17 @@ class AX25Connection:
             self.config = AX25Config(modulo=8 if cmd == 0x2F else 128)
             self._send_ua()
 
-        elif cmd == 0x63:  # UA response
+        elif cmd == 0x63:  # UA (modulo 8)
             if self.sm.state == AX25State.AWAITING_CONNECTION:
                 self.sm.transition("UA_received")
                 self.timers.stop_t1_sync()
                 logger.info("Connection established")
+
+        elif cmd == 0x6F:  # UA (modulo 128) - Added this case
+            if self.sm.state == AX25State.AWAITING_CONNECTION:
+                self.sm.transition("UA_received")
+                self.timers.stop_t1_sync()
+                logger.info("Connection established (modulo 128)")
 
         elif cmd == 0x43:  # DISC
             self.sm.transition("DISC_received")
@@ -318,6 +320,9 @@ class AX25Connection:
         logger.warning("T1 timeout - initiating recovery")
         self.sm.transition("T1_timeout")
         self._retransmit_all()
+        self.retry_count += 1
+        if self.retry_count >= self.config.retry_count:
+            self.sm.transition("T1_timeout")  # Final timeout leads to disconnect
 
     def _retransmit_all(self) -> None:
         """Retransmit all outstanding frames."""
@@ -350,4 +355,3 @@ class AX25Connection:
         # The timers will call their callbacks automatically
         # This is just a placeholder for the test interface
         pass
-

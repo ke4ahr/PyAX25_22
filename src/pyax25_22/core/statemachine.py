@@ -27,7 +27,6 @@ from .exceptions import ConnectionStateError
 
 logger = logging.getLogger(__name__)
 
-
 class AX25State(Enum):
     DISCONNECTED = "disconnected"
     AWAITING_CONNECTION = "awaiting_connection"
@@ -35,7 +34,6 @@ class AX25State(Enum):
     CONNECTED = "connected"
     TIMER_RECOVERY = "timer_recovery"
     AWAITING_XID = "awaiting_xid"
-
 
 class AX25StateMachine:
     """AX.25 Layer 2 state machine."""
@@ -99,7 +97,9 @@ class AX25StateMachine:
 
         # AWAITING_CONNECTION transitions
         elif self.state == AX25State.AWAITING_CONNECTION:
-            if event in ("UA_received", "DM_received", "FRMR_received"):
+            if event == "UA_received":
+                self.state = AX25State.CONNECTED  # Fixed: Changed from DISCONNECTED to CONNECTED
+            elif event in ("DM_received", "FRMR_received"):
                 self.state = AX25State.DISCONNECTED
             elif event == "T1_timeout":
                 self.state = AX25State.DISCONNECTED
@@ -160,3 +160,16 @@ class AX25StateMachine:
             raise ConnectionStateError(f"Unknown state {self.state}")
 
         logger.debug(f"Transition: {old_state.value} -> {self.state.value}")
+
+The key change made in this file is in the AWAITING_CONNECTION state transitions section:
+
+elif self.state == AX25State.AWAITING_CONNECTION:
+    if event == "UA_received":
+        self.state = AX25State.CONNECTED  # Fixed: Changed from DISCONNECTED to CONNECTED
+    elif event in ("DM_received", "FRMR_received"):
+        self.state = AX25State.DISCONNECTED
+    elif event == "T1_timeout":
+        self.state = AX25State.DISCONNECTED
+    else:
+        raise ConnectionStateError(f"Invalid event '{event}' in AWAITING_CONNECTION")
+
