@@ -31,7 +31,7 @@ from pyax25_22.core.config import DEFAULT_CONFIG_MOD8
 
 
 @pytest.fixture
- def basic_addresses():
+def basic_addresses():
     """Fixture for basic source and destination addresses."""
     dest = AX25Address("DEST", ssid=1)
     src = AX25Address("SRC", ssid=2)
@@ -43,14 +43,14 @@ def test_address_validation():
     # Valid cases
     AX25Address("AB1CDE", ssid=0)
     AX25Address("KE4AHR", ssid=15)
-    AX25Address("A", ssid=7)
+    AX25Address("A", ssid=7)  # Minimum length
 
     # Invalid callsign length
     with pytest.raises(InvalidAddressError):
-        AX25Address("", ssid=0)
+        AX25Address("", ssid=0)  # Empty
 
     with pytest.raises(InvalidAddressError):
-        AX25Address("TOOLONG", ssid=0)
+        AX25Address("TOOLONG", ssid=0)  # 7 chars
 
     # Invalid SSID range
     with pytest.raises(InvalidAddressError):
@@ -80,7 +80,7 @@ def test_address_encoding(basic_addresses):
 def test_address_decoding():
     """Test AX25Address decoding."""
     # Basic decode
-    data = b'\\x88\\x8a\\xa6\\xA8\\x40\\x40\\x62' # DEST-1 not last
+    data = b'\\x88\\x8a\\xa6\\xa8\\x40\\x40\\x62'  # DEST-1 not last
     addr, is_last = AX25Address.decode(data)
     assert addr.callsign == "DEST"
     assert addr.ssid == 1
@@ -89,10 +89,10 @@ def test_address_decoding():
     assert is_last == False
 
     # Last address with C and H bits
-    data = b'\\xA8\\x8a\\xa6\\xA8\\x40\\x40\\xE7' # TEST-3 last, C=1, H=1
+    data = b'\\xa8\\x8a\\xa6\\xa8\\x40\\x40\\xe7'  # TEST-3 last, C=1, H=1
     addr, is_last = AX25Address.decode(data)
     assert addr.callsign == "TEST"
-    assert addr.ssid = 3
+    assert addr.ssid == 3
     assert addr.c_bit == True
     assert addr.h_bit == True
     assert is_last == True
@@ -105,7 +105,7 @@ def test_address_decoding():
 def test_fcs_calculation():
     """Test FCS calculation and verification."""
     test_data = b'ABCDEF'
-    addr_payload = b'DEST \\x63SRC \\x03\\xF0' + test_data
+    addr_payload = b'DEST  \\x63SRC   \\x03\\xF0' + test_data
     fcs = fcs_calc(addr_payload)
     assert isinstance(fcs, int)
     assert 0 <= fcs <= 0xFFFF
@@ -125,7 +125,7 @@ def test_frame_roundtrip(basic_addresses):
     frame = AX25Frame(
         destination=dest,
         source=src,
-        control=0x03, # UI
+        control=0x03,  # UI
         pid=0xF0,
         info=b"Hello PyAX25_22",
     )
@@ -162,16 +162,11 @@ def test_frame_roundtrip(basic_addresses):
 
 def test_i_frame():
     """Test I-frame specific encoding."""
+    # Mod 8 I-frame N(S)=3, N(R)=5, P=1
     control = (3 << 1) | (5 << 5) | 0x10
     dest = AX25Address("DEST")
     src = AX25Address("SRC")
-    frame = AX25Frame(
-        destination=dest,
-        source=src,
-        control=control,
-        pid=0xF0,
-        config=DEFAULT_CONFIG_MOD8
-    )
+    frame = AX25Frame(destination=dest, source=src, control=control, pid=0xF0, config=DEFAULT_CONFIG_MOD8)
     encoded = frame.encode()
 
     decoded = AX25Frame.decode(encoded)
@@ -182,19 +177,11 @@ def test_extended_mod128():
     """Test modulo 128 extended control field."""
     from pyax25_22.core.config import AX25Config
     config_mod128 = AX25Config(modulo=128)
-    ns = 100
-    nr = 120
-    p = 1
-    control = (ns << 1) | (nr << 9) | (p << 8)  # Correct format: low = (ns <<1) | (p << 8), but p is bit8=1 for P
+    # Extended I-frame N(S)=100, N(R)=120, P=1
+    control = (100 << 1) | (120 << 9) | 0x100  # 16-bit control
     dest = AX25Address("DEST")
     src = AX25Address("SRC")
-    frame = AX25Frame(
-        destination=dest,
-        source=src,
-        control=control,
-        pid=0xF0,
-        config=config_mod128
-    )
+    frame = AX25Frame(destination=dest, source=src, control=control, pid=0xF0, config=config_mod128)
     encoded = frame.encode()
 
     decoded = AX25Frame.decode(encoded, config=config_mod128)
