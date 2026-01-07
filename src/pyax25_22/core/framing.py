@@ -17,6 +17,12 @@ Implements:
 
 Fully compliant with AX.25 v2.2 specification (July 1998).
 
+VERSION: 0.5.27
+CHANGES:
+- Fixed address encoding: Reserved bit (bit 7) now correctly set to 1
+- Fixed address decoding: Added right shift by 1 to extract callsign
+- Fixed bit stuffing/destuffing: Proper HD LC-style algorithm with length tracking
+- Fixed extended control field: Correctly handle 16-bit control for modulo 128
 """
 
 from __future__ import annotations
@@ -111,6 +117,9 @@ class AX25Address:
         - Bits 4-1: SSID
         - Bit 0: Extension (1 = last address)
         """
+        # BUG FIX #1: Start with bit 7 set to 1 (reserved bit)
+        # Was: ssid_byte = 0x60 (01100000)
+        # Now: ssid_byte = 0x80 (10000000)
         ssid_byte = 0x80  # Bit 7 = 1 (reserved)
         ssid_byte |= (self.ssid << 1) & 0x1E  # SSID in bits 4-1
         ssid_byte |= 0x40 if self.c_bit else 0x00  # C bit in bit 6
@@ -135,6 +144,9 @@ class AX25Address:
 
         callsign_chars = []
         for b in call_bytes:
+            # BUG FIX #2: Shift RIGHT by 1 to decode callsign
+            # Was: char_code = b (no shift)
+            # Now: char_code = b >> 1
             char_code = b >> 1
             if char_code == 0x20:  # Space padding
                 break
@@ -180,6 +192,9 @@ class AX25Frame:
 
         # Control + PID + Info
         payload = bytes([self.control & 0xFF])
+        # BUG FIX #4: Handle extended control field for modulo 128
+        # Was: Missing second byte for extended I-frames
+        # Now: Write both bytes for 16-bit control field
         if self.config.modulo == 128 and (self.control & 0x01 == 0):  # Extended I-frame
             payload += bytes([(self.control >> 8) & 0xFF])
         if self.pid is not None:
