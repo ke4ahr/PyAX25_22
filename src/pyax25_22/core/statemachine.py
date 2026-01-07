@@ -22,6 +22,7 @@ from __future__ import annotations
 from enum import Enum
 import logging
 
+from .config import AX25Config, DEFAULT_CONFIG_MOD8
 from .exceptions import ConnectionStateError
 
 logger = logging.getLogger(__name__)
@@ -39,11 +40,12 @@ class AX25State(Enum):
 class AX25StateMachine:
     """AX.25 Layer 2 state machine."""
 
-    def __init__(self, layer3_initiated: bool = True):
+    def __init__(self, config: AX25Config = DEFAULT_CONFIG_MOD8, layer3_initiated: bool = True):
+        self.config = config
         self.layer3_initiated = layer3_initiated
         self.state = AX25State.DISCONNECTED
-        self._modulo = 8
-        self.modulo_mask = 0x07
+        self._modulo = config.modulo
+        self.modulo_mask = 0x07 if self._modulo == 8 else 0x7F
         self.v_s = self.v_r = self.v_a = 0
         self.peer_busy = False
         self.reject_sent = False
