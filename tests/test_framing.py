@@ -9,7 +9,6 @@ Comprehensive unit tests for framing module.
 Covers:
 - Address encoding/decoding and validation
 - FCS calculation and verification
-- Bit stuffing/destuffing
 - Full frame round-trip (encode/decode)
 - Error cases (invalid address, FCS mismatch, short frames)
 """
@@ -162,7 +161,6 @@ def test_frame_roundtrip(basic_addresses):
 
 def test_i_frame():
     """Test I-frame specific encoding."""
-    # Mod 8 I-frame N(S)=3, N(R)=5, P=1
     control = (3 << 1) | (5 << 5) | 0x10
     dest = AX25Address("DEST")
     src = AX25Address("SRC")
@@ -177,8 +175,7 @@ def test_extended_mod128():
     """Test modulo 128 extended control field."""
     from pyax25_22.core.config import AX25Config
     config_mod128 = AX25Config(modulo=128)
-    # Extended I-frame N(S)=100, N(R)=120, P=1
-    control = (100 << 1) | (120 << 9) | 0x100  # 16-bit control
+    control = (100 << 1) | (120 << 9) | 0x100
     dest = AX25Address("DEST")
     src = AX25Address("SRC")
     frame = AX25Frame(destination=dest, source=src, control=control, pid=0xF0, config=config_mod128)

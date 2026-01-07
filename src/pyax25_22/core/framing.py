@@ -73,9 +73,9 @@ class AX25Address:
         self._call_bytes = bytes((ord(c) << 1) for c in callsign_clean.ljust(6, " "))
 
     def encode(self, last: bool = False) -> bytes:
-        ssid_byte = 0x60  # reserved bits 6 and 5 = 1
+        ssid_byte = 0x60
         ssid_byte |= (self.ssid << 1) & 0x1E
-        ssid_byte |= 0x80 if self.c_bit or self.h_bit else 0x00  # bit7 = C or H
+        ssid_byte |= 0x80 if self.c_bit or self.h_bit else 0x00
         ssid_byte |= 0x01 if last else 0x00
 
         return self._call_bytes + bytes([ssid_byte])
@@ -94,7 +94,7 @@ class AX25Address:
             if char_code == 0x20:
                 break
             callsign_chars.append(chr(char_code))
-        callsign = "".join(callsign_chars).strip()
+        callsign = "".join(callsign_chars).rstrip()
 
         addr = cls(
             callsign=callsign,
