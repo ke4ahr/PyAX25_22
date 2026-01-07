@@ -88,7 +88,8 @@ def test_address_encoding(basic_addresses):
 def test_address_decoding():
     """Test AX25Address decoding."""
     # Basic decode
-    data = b'\x88\x8a\xa6\xa8@@\x62'  # DEST-1 not last (note: SSID byte may vary)
+    # SSID byte should have bit 7=1 (reserved), so 0x82 not 0x62
+    data = b'\x88\x8a\xa6\xa8@@\x82'  # DEST-1 not last, with reserved bit set
     addr, is_last = AX25Address.decode(data)
     assert addr.callsign == "DEST"
     assert addr.ssid == 1
