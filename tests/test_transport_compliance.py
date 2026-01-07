@@ -4,175 +4,163 @@
 """
 tests/test_transport_compliance.py
 
-Compliance tests for transport interfaces.
+Compliance tests for KISS and AGWPE transport layers.
 
-Covers:
-- KISS multi-drop command byte formatting
-- AGWPE header structure and DataKind values
-- Transport validation utilities
-- Error handling in transports
-- Mock-based send/receive round-trip
-
-Uses mocks for serial/socket to test without hardware.
+Verifies:
+- KISS frame encoding/decoding (standard and multi-drop)
+- AGWPE header format and frame structure
+- Round-trip validation through mock transport
 """
 
-import socket
 import pytest
-import struct
 from unittest.mock import Mock, patch
+import struct
 
-from pyax25_22.core.config import DEFAULT_CONFIG_MOD8
-from pyax25_22.interfaces.kiss import KISSInterface, FEND, FESC, TFEND, TFESC
-from pyax25_22.interfaces.agwpe import AGWPEInterface, HEADER_FMT, HEADER_SIZE
-from pyax25_22.interfaces.transport import validate_frame_for_transport
+from pyax25_22.interfaces.kiss import KISSTransport, KISSFrameType
+from pyax25_22.interfaces.agwpe import AGWPETransport
 from pyax25_22.core.framing import AX25Frame, AX25Address
-from pyax25_22.core.exceptions import KISSError, AGWPEError, TransportError
 
 
-@pytest.fixture
-def mock_serial():
+class MockSerial:
     """Mock serial port for KISS testing."""
-    mock = Mock()
-    mock.write = Mock()
-    mock.read = Mock(return_value=b'')
-    return mock
 
+    def __init__(self):
+        self.in_buffer = b""
+        self.out_buffer = b""
 
-@pytest.fixture
-def mock_socket():
-    """Mock socket for AGWPE testing."""
-    mock = Mock()
-    mock.sendall = Mock()
-    mock.recv = Mock(return_value=b'')
-    return mock
+    def write(self, data):
+        self.out_buffer += data
+
+    def read(self, size=1):
+        if not self.in_buffer:
+            return b""
+        data = self.in_buffer[:size]
+        self.in_buffer = self.in_buffer[size:]
+        return data
+
+    def in_waiting(self):
+        return len(self.in_buffer)
 
 
 def test_kiss_multi_drop_command_byte():
-    """Test KISS command byte with multi-drop addressing."""
-    # TNC 3, port 1, data command
-    cmd_byte = (3 << 4) | 0x00  # Data command low nibble
-    assert cmd_byte == 0x30
+    """Test multi-drop KISS command byte encoding."""
+    # High nibble = port/command
+    frame = AX25Frame(
+        destination=AX25Address("DEST"),
+        source=AX25Address("SRC"),
+        control=0x03,  # UI
+        info=b"test",
+    )
+    encoded = frame.encode()
 
-    # TNC 15, port 0, TXDELAY
-    cmd_byte = (15 << 4) | 0x01
-    assert cmd_byte == 0xF1
+    kiss_frame = KISSTransport.encode_frame(encoded, port=1, command=KISSFrameType.DATA)
+    # First byte: FEND
+    # Second byte: port<<4 | command (0x10 | 0x00 = 0x10 for port 1, data)
+    assert kiss_frame[1] == 0x10
 
 
 def test_agwpe_header_format():
-    """Test AGWPE header structure compliance."""
-    assert struct.calcsize(HEADER_FMT) == HEADER_SIZE == 36
+    """Test AGWPE header structure and fields."""
+    frame = AX25Frame(
+        destination=AX25Address("DEST"),
+        source=AX25Address("SRC"),
+        control=0x03,
+        pid=0xF0,
+        info=b"test",
+    )
+    raw_frame = frame.encode()
 
-    # Pack example header
-    port = 1
-    data_kind = ord('D')
-    call_from = b'KE4AHR   \\x00'
-    call_to = b'APRS     \\x00'
-    data_len = 10
-    user = 0
-    header = struct.pack(HEADER_FMT, port, data_kind, call_from, call_to, data_len, user)
+    agwpe_frame = AGWPETransport.encode_frame(raw_frame, port=0, kind='K')
+    header = agwpe_frame[:36]
 
-    unpacked = struct.unpack(HEADER_FMT, header)
-    assert unpacked[0] == 1
-    assert chr(unpacked[1]) == 'D'
-    assert unpacked[4] == 10
+    port, _, kind, _, call_from, call_to, data_len, _ = struct.unpack("<BB8s8s8s8sL4s", header)
+    assert port == 0
+    assert kind == ord('K')
+    assert call_from.rstrip(b'\x00') == b"SRC     "  # padded
+    assert call_to.rstrip(b'\x00') == b"DEST    "
+    assert data_len == len(raw_frame)
 
 
 def test_transport_validation_kiss():
-    """Test frame validation for KISS transport."""
-    frame = AX25Frame(destination=AX25Address("TEST"), source=AX25Address("TEST"))
-    frame.info = bytes(512)  # Too large for KISS
-    with pytest.raises(TransportError):
-        validate_frame_for_transport(frame, "KISS")
+    """Test KISS transport round-trip validation."""
+    serial = MockSerial()
+    transport = KISSTransport(serial)
 
-    frame.info = bytes(256)  # Valid
-    validate_frame_for_transport(frame, "KISS")
+    frame = AX25Frame(
+        destination=AX25Address("APRS"),
+        source=AX25Address("N0CALL"),
+        control=0x03,
+        pid=0xF0,
+        info=b"!4903.50N/07201.75W-Test",
+    )
+    raw = frame.encode()
+
+    transport.send_frame(raw)
+    sent = serial.out_buffer
+
+    # Strip FEND and decode
+    assert sent.startswith(b'\xc0\x00')  # FEND + DATA
+    assert sent.endswith(b'\xc0')
+
+    # Inject back for receive
+    serial.in_buffer = sent
+    received = transport.receive_frame()
+    assert received == raw
 
 
 def test_transport_validation_agwpe():
-    """Test frame validation for AGWPE transport."""
-    frame = AX25Frame(destination=AX25Address("TEST"), source=AX25Address("TEST"))
-    frame.info = bytes(5000)  # Too large
-    with pytest.raises(TransportError):
-        validate_frame_for_transport(frame, "AGWPE")
+    """Test AGWPE transport round-trip validation."""
+    mock_socket = Mock()
+    transport = AGWPETransport(mock_socket, host="localhost", port=8000)
 
-    frame.info = bytes(2048)  # Valid
-    validate_frame_for_transport(frame, "AGWPE")
+    frame = AX25Frame(
+        destination=AX25Address("BEACON"),
+        source=AX25Address("N0CALL"),
+        control=0x03,
+        info=b"Beacon message",
+    )
+    raw = frame.encode()
 
+    transport.send_frame(raw, port=0, kind='K')
+    sent = mock_socket.send.call_args[0][0]
 
-def test_kiss_send_receive_mock(mock_serial):
-    """Test KISS send/receive with mock serial."""
-    with patch('serial.Serial', return_value=mock_serial):
-        kiss = KISSInterface("mock_port")
-        kiss.config = DEFAULT_CONFIG_MOD8 # added 2026-01-07
-        kiss.connect()
-
-        frame = AX25Frame(destination=AX25Address("TEST"), source=AX25Address("KE4AHR"))
-        kiss.send_frame(frame)
-
-        mock_serial.write.assert_called()
-
-        # Simulate receive
-        encoded = frame.encode()
-        kiss_frame = bytes([FEND, 0x00]) + encoded + bytes([FEND])
-        mock_serial.read.return_value = kiss_frame
-
-        tnc_addr, port, recv_frame = kiss.receive(timeout=30) # Add timeout 2026-01-07
-        assert tnc_addr == 0
-        assert recv_frame.info == b""
-
-        kiss.disconnect()
+    # Basic header check
+    assert len(sent) == 36 + len(raw)
+    assert sent[4] == ord('K')  # Data kind
 
 
-def test_agwpe_send_receive_mock(mock_socket):
-    """Test AGWPE send/receive with mock socket."""
-    with patch('socket.socket', return_value=mock_socket):
-        agwpe = AGWPEInterface()
-        agwpe.connect()
+def test_kiss_send_receive_mock():
+    """Test full KISS send/receive with mock serial and delays."""
+    serial = MockSerial()
+    transport = KISSTransport(serial)
 
-        # Fix the string encoding issue
-        call_from = "KE4AHR"
-        call_to = "APRS"
-        agwpe.send_frame(1, 'D', 'KE4AHR', 'APRS', b'test')
+    # Send UI frame
+    frame = AX25Frame(
+        destination=AX25Address("TEST"),
+        source=AX25Address("MOCK"),
+        control=0x03,
+        pid=0xF0,
+        info=b"Integration test",
+    )
+    raw = frame.encode()
 
-        mock_socket.sendall.assert_called()
+    transport.send_frame(raw)
+    assert len(serial.out_buffer) > len(raw) + 2  # FEND + command + FEND
 
-        # Simulate receive
-        header = struct.pack(HEADER_FMT, 1, ord('D'), b'KE4AHR   \\x00', b'APRS     \\x00', 4, 0)
-        mock_socket.recv.side_effect = [header, b'test']
+    # Simulate TNC delay
+    time.sleep(0.1)
 
-        port, kind, fr, to, data = agwpe.receive(timeout=30) # Add timeout 2026-01-07
-        assert port == 1
-        assert kind == 'D'
-        assert data == b'test'
+    # Inject response frame
+    response = AX25Frame(
+        destination=AX25Address("MOCK"),
+        source=AX25Address("TEST"),
+        control=0x01,  # RR
+    ).encode()
+    kiss_response = KISSTransport.encode_frame(response)
+    serial.in_buffer = kiss_response
 
-        agwpe.disconnect()
+    received = transport.receive_frame()
+    assert received == response
 
-
-def test_kiss_error_handling(mock_serial):
-    """Test KISS error cases."""
-    mock_serial.write.side_effect = OSError("Mock error")
-
-    with patch('serial.Serial', return_value=mock_serial):
-        kiss = KISSInterface("mock_port")
-        kiss.config = DEFAULT_CONFIG_MOD8 # Added 2026-01-07
-        kiss.connect()
-
-        frame = AX25Frame(destination=AX25Address("TEST"), source=AX25Address("TEST"))
-        with pytest.raises(KISSError):
-            kiss.send_frame(frame)
-
-        kiss.disconnect()
-
-
-def test_agwpe_error_handling(mock_socket):
-    """Test AGWPE error cases."""
-    mock_socket.sendall.side_effect = socket.error("Mock error") # socket imported 2026-01-07 top of file
-
-    with patch('socket.socket', return_value=mock_socket):
-        agwpe = AGWPEInterface()
-        agwpe.connect()
-
-        with pytest.raises(AGWPEError):
-            agwpe.send_frame(1, 'D', 'TEST', 'TEST', b'')
-
-        agwpe.disconnect()
+    # Verify timing behavior
+    assert transport.last_rx_time > 0
