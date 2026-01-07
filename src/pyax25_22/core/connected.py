@@ -114,7 +114,7 @@ class AX25Connection:
         )
 
         self._send_frame(sabm_frame)
-        self.timers.start_t1(self._on_t1_timeout)
+        self.timers.start_t1_sync(self._on_t1_timeout)
         logger.info("Connection request sent (SABM/SABME)")
         return sabm_frame
 
@@ -164,7 +164,7 @@ class AX25Connection:
 
             # Start T1 if first outstanding frame
             if len(self.flow.outstanding) == 1:
-                self.timers.start_t1(self._on_t1_timeout)
+                self.timers.start_t1_sync(self._on_t1_timeout)
 
     def _build_i_frame(self, info: bytes, p_bit: bool = False) -> AX25Frame:
         """Build an I-frame."""

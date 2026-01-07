@@ -51,7 +51,6 @@ def mock_connection_mod128():
         config=config,
         initiate=True,
     )
-    )
     conn.transport = MockTransport()
     return conn
 
@@ -88,7 +87,6 @@ async def test_full_connected_lifecycle(mock_connection_mod8):
         destination=AX25Address("TEST"),
         source=AX25Address("DEST"),
         control=0x63,  # UA
-    )
     ).encode()
     conn.transport.inject_frame(ua_frame)
     await conn._process_incoming()
@@ -128,7 +126,20 @@ async def test_full_connected_lifecycle(mock_connection_mod8):
 async def test_async_timer_t1(mock_connection_mod8):
     """Test T1 timeout and retry behavior."""
     conn = mock_connection_mod8
-    conn.config.t1_timeout = 0.5  # Short for testing
+    # Create a new config with the desired timeout
+    new_config = AX25Config(
+    modulo=conn.config.modulo,
+    max_frame=conn.config.max_frame,
+    window_size=conn.config.window_size,
+    t1_timeout=0.5,  # Short for testing
+    t3_timeout=conn.config.t3_timeout,
+    retry_count=conn.config.retry_count,
+    tx_delay=conn.config.tx_delay,
+    tx_tail=conn.config.tx_tail,
+    persistence=conn.config.persistence,
+    slot_time=conn.config.slot_time
+)
+conn.config = new_config
 
     await conn.connect()
     assert conn.state == AX25State.AWAITING_CONNECTION
