@@ -71,7 +71,7 @@ class MockTransport:
     def inject_frame(self, frame: bytes):
         self.received_frames.append(frame)
 
-@pytest_asyncio.fixture
+@pytest_mark.asyncio
 async def test_full_connected_lifecycle(mock_connection_mod8):
     """Test complete connection lifecycle."""
     conn = mock_connection_mod8
@@ -120,7 +120,7 @@ async def test_full_connected_lifecycle(mock_connection_mod8):
     assert conn.state == AX25State.DISCONNECTED
 
 
-@pytest_asyncio.fixture
+@pytest.mark.asyncio
 async def test_async_timer_t1(mock_connection_mod8):
     """Test T1 timeout and retry behavior."""
     conn = mock_connection_mod8
@@ -137,7 +137,7 @@ async def test_async_timer_t1(mock_connection_mod8):
     assert len(conn.transport.sent_frames) >= conn.config.retry_count  # Retries sent
 
 
-@pytest_asyncio.fixture
+@pytest.mark.asyncio
 async def test_flow_control_integration(mock_connection_mod8):
     """Test flow control with peer busy."""
     conn = mock_connection_mod8
@@ -186,7 +186,7 @@ async def test_flow_control_integration(mock_connection_mod8):
     assert len(conn.transport.sent_frames) > initial_sent
 
 
-@pytest_asyncio.fixture
+@pytest.mark.asyncio
 async def test_mod128_lifecycle(mock_connection_mod128):
     """Test connection with modulo 128."""
     conn = mock_connection_mod128

@@ -28,6 +28,7 @@ class MockSerial:
     def __init__(self):
         self.in_buffer = b""
         self.out_buffer = b""
+        self.is_open = True
 
     def write(self, data):
         self.out_buffer += data
@@ -39,12 +40,27 @@ class MockSerial:
         self.in_buffer = self.in_buffer[size:]
         return data
 
+    def close(self):
+        self.is_open = False
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.close()
+
     def in_waiting(self):
         return len(self.in_buffer)
 
 
 def test_kiss_multi_drop_command_byte():
     """Test multi-drop KISS command byte encoding."""
+    serial = MockSerial(()
+
+    with patch('serial.Serial', return_value=serial):
+        transport = KISSInterface("mock_port")
+        transport.connect()
+
     # High nibble = port/command
     frame = AX25Frame(
         destination=AX25Address("DEST"),
@@ -71,6 +87,12 @@ def test_kiss_multi_drop_command_byte():
 
 def test_agwpe_header_format():
     """Test AGWPE header structure and fields."""
+    mock_socket = Mock()
+
+    with patch('socket.socket', return_value=mock_socket):
+        transport = AGWPEInterface()
+        transport.connect()
+
     frame = AX25Frame(
         destination=AX25Address("DEST"),
         source=AX25Address("SRC"),
