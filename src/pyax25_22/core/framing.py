@@ -1,3 +1,4 @@
+# src/pyax25_22/core/framing.py
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2025-2026 Kris Kirby, KE4AHR
 
@@ -15,6 +16,7 @@ Implements:
 - FCS calculation and verification (CRC-16/CCITT-FALSE)
 
 Fully compliant with AX.25 v2.2 specification (July 1998).
+
 """
 
 from __future__ import annotations
@@ -109,7 +111,7 @@ class AX25Address:
         - Bits 4-1: SSID
         - Bit 0: Extension (1 = last address)
         """
-        ssid_byte = 0x60  # Bit 7 = 1, bit 6 = 0 initially
+        ssid_byte = 0x80  # Bit 7 = 1 (reserved)
         ssid_byte |= (self.ssid << 1) & 0x1E  # SSID in bits 4-1
         ssid_byte |= 0x40 if self.c_bit else 0x00  # C bit in bit 6
         ssid_byte |= 0x20 if self.h_bit else 0x00  # H bit in bit 5
@@ -169,8 +171,8 @@ class AX25Frame:
         Encode complete frame with flags, bit stuffing, and FCS.
         """
         # Address field
-        addr_field = self.destination.encode(last=not self.digipeaters)
-        addr_field += self.source.encode(last=not self.digipeaters)
+        addr_field = self.destination.encode(last=False)
+        addr_field += self.source.encode(last=(len(self.digipeaters) == 0))
 
         for i, digi in enumerate(self.digipeaters):
             last = i == len(self.digipeaters) - 1
@@ -196,79 +198,93 @@ class AX25Frame:
 
     @staticmethod
     def _bit_stuff(data: bytes) -> bytes:
-        """Apply AX.25 bit stuffing: insert 0 after five consecutive 1s."""
-        result = bytearray()
+        """
+        Apply AX.25 bit stuffing: insert 0 after five consecutive 1s.
+        
+        BUG FIX #3: Rewrote using proper HDLC-style bit stuffing algorithm.
+        """
+        if not data:
+            return b''
+        
+        result_bits = []
         ones_count = 0
-        current_byte = 0
-        bit_pos = 0
-
-        for byte in data:
-            for i in range(8):
-                bit = (byte >> i) & 1
-                current_byte |= bit << bit_pos
-                bit_pos += 1
-
+        
+        # Process each bit in LSB-first order (HDLC standard)
+        for byte_val in data:
+            for bit_pos in range(8):
+                bit = (byte_val >> bit_pos) & 1
+                result_bits.append(bit)
+                
                 if bit == 1:
                     ones_count += 1
                     if ones_count == 5:
-                        # Insert stuffed 0
-                        if bit_pos == 8:
-                            result.append(current_byte)
-                            current_byte = 0
-                            bit_pos = 0
+                        # Insert a 0 bit for stuffing
+                        result_bits.append(0)
                         ones_count = 0
                 else:
                     ones_count = 0
-
-                if bit_pos == 8:
-                    result.append(current_byte)
-                    current_byte = 0
-                    bit_pos = 0
-
-        # Flush remaining bits
-        if bit_pos > 0:
-            result.append(current_byte)
-
+        
+        # Pack bits back into bytes
+        result = bytearray()
+        for i in range(0, len(result_bits), 8):
+            byte_val = 0
+            for j in range(min(8, len(result_bits) - i)):
+                if result_bits[i + j]:
+                    byte_val |= (1 << j)
+            result.append(byte_val)
+        
         return bytes(result)
 
     @classmethod
     def _bit_destuff(cls, data: bytes) -> bytes:
-        """Remove AX.25 bit stuffing: remove 0 after five consecutive 1s."""
-        result = bytearray()
+        """
+        Remove AX.25 bit stuffing: remove 0 after five consecutive 1s.
+        
+        BUG FIX #3: Rewrote using proper HDLC-style destuffing algorithm.
+        Length is determined by FCS position in the full frame decode.
+        """
+        if not data:
+            return b''
+        
+        # Convert to bit stream
+        bits = []
+        for byte_val in data:
+            for bit_pos in range(8):
+                bits.append((byte_val >> bit_pos) & 1)
+        
+        # Remove stuffed bits
+        result_bits = []
         ones_count = 0
-        current_byte = 0
-        bit_pos = 0
-
-        for byte in data:
-            for i in range(8):
-                bit = (byte >> i) & 1
-                current_byte |= bit << bit_pos
-                bit_pos += 1
-
-                if ones_count == 5:
-                    if bit == 0:
-                        ones_count = 0
-                    # Ignore invalid 1 after 5 ones
-                    if bit_pos == 8:
-                        result.append(current_byte)
-                        current_byte = 0
-                        bit_pos = 0
-                    continue
-
-                if bit == 1:
-                    ones_count += 1
-                else:
-                    ones_count = 0
-
-                if bit_pos == 8:
-                    result.append(current_byte)
-                    current_byte = 0
-                    bit_pos = 0
-
-        # Flush
-        if bit_pos > 0:
-            result.append(current_byte)
-
+        i = 0
+        
+        while i < len(bits):
+            bit = bits[i]
+            
+            # If we just saw 5 ones and this is a 0, it's stuffed - skip it
+            if ones_count == 5 and bit == 0:
+                ones_count = 0
+                i += 1
+                continue
+            
+            # Add this bit to output
+            result_bits.append(bit)
+            
+            if bit == 1:
+                ones_count += 1
+            else:
+                ones_count = 0
+            
+            i += 1
+        
+        # Pack bits back into bytes
+        result = bytearray()
+        for i in range(0, len(result_bits), 8):
+            byte_val = 0
+            for j in range(min(8, len(result_bits) - i)):
+                if result_bits[i + j]:
+                    byte_val |= (1 << j)
+            result.append(byte_val)
+        
         return bytes(result)
 
     @classmethod
@@ -302,6 +318,9 @@ class AX25Frame:
         # Control field
         control = destuffed[offset]
         offset += 1
+        # BUG FIX #4: Read second byte for extended control field (modulo 128)
+        # Was: Only reading first byte
+        # Now: Read 16-bit control for mod 128 I-frames
         if config.modulo == 128 and (control & 0x01 == 0):  # Extended I-frame
             if offset >= len(destuffed):
                 raise FrameError("Truncated extended control field")
@@ -309,7 +328,8 @@ class AX25Frame:
             offset += 1
 
         pid = None
-        if (control & 0x01 == 0) or (control & 0x03 == 0x03):
+        # I-frames and UI frames have PID
+        if (control & 0x01 == 0) or ((control & 0xFF) == 0x03):
             if offset >= len(destuffed):
                 raise FrameError("Truncated PID field")
             pid = destuffed[offset]

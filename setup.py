@@ -1,3 +1,4 @@
+# setup.py
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2025-2026 Kris Kirby, KE4AHR
 
@@ -20,7 +21,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="pyax25-22",
-    version = "0.5.26",
+    version = "0.5.28",
     author="Kris Kirby, KE4AHR",
     description="Pure Python implementation of AX.25 v2.2 Layer 2 protocol for amateur radio",
     long_description=long_description,
