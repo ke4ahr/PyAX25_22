@@ -203,7 +203,14 @@ class AX25Connection:
             self._handle_i_frame(frame)
 
         # Update T3 on any valid frame
-        self.timers.start_t3(lambda: logger.warning("T3 idle timeout"))
+        self.timers.start_t3_sync(lambda: logger.warning("T3 idle timeout"))
+    
+    
+    def _on_t1_timeout(self) -> None:
+        """Handle T1 expiration."""
+        logger.warning("T1 timeout - initiating recovery")
+        self.sm.transition("T1_timeout")  # Fixed: changed from "timeout" to "T1_timeout"
+        self._retransmit_all()
 
     def _handle_u_frame(self, frame: AX25Frame) -> None:
         cmd = frame.control & ~0x10  # Remove P/F bit
@@ -309,7 +316,7 @@ class AX25Connection:
     def _on_t1_timeout(self) -> None:
         """Handle T1 expiration."""
         logger.warning("T1 timeout - initiating recovery")
-        self.sm.transition("timeout")
+        self.sm.transition("T1_timeout")
         self._retransmit_all()
 
     def _retransmit_all(self) -> None:

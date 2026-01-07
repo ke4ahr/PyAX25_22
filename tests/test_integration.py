@@ -221,7 +221,7 @@ async def test_mod128_lifecycle(mock_connection_mod128):
     conn = mock_connection_mod128
 
     await conn.connect()
-    # Simulate SABME response with UA
+    # Simulate UA response (not SABME - that would be for incoming connection)
     conn.transport.inject_frame(
         AX25Frame(
             destination=AX25Address("TEST"),
