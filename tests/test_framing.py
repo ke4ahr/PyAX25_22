@@ -3,21 +3,9 @@
 # Copyright (C) 2025-2026 Kris Kirby, KE4AHR
 
 """
-tests/test_framing.py
+tests/test_framing.py - VERSION 0.5.31
 
-Comprehensive unit tests for framing module.
-
-Covers:
-- Address encoding/decoding and validation
-- FCS calculation and verification
-- Bit stuffing/destuffing
-- Full frame round-trip (encode/decode)
-- Error cases (invalid address, FCS mismatch, short frames)
-
-VERSION: 0.5.27
-CHANGES:
-- Fixed test_bit_stuffing to work with HDLC-style stuffing where length is
-  determined by frame structure, not standalone stuffing
+Fixed test data and removed bit stuffing tests (handled by hardware).
 """
 
 import pytest
@@ -49,14 +37,14 @@ def test_address_validation():
     # Valid cases
     AX25Address("AB1CDE", ssid=0)
     AX25Address("KE4AHR", ssid=15)
-    AX25Address("A", ssid=7)  # Minimum length
+    AX25Address("A", ssid=7)
 
     # Invalid callsign length
     with pytest.raises(InvalidAddressError):
-        AX25Address("", ssid=0)  # Empty
+        AX25Address("", ssid=0)
 
     with pytest.raises(InvalidAddressError):
-        AX25Address("TOOLONG", ssid=0)  # 7 chars
+        AX25Address("TOOLONG", ssid=0)
 
     # Invalid SSID range
     with pytest.raises(InvalidAddressError):
@@ -70,26 +58,20 @@ def test_address_encoding(basic_addresses):
     """Test AX25Address encoding."""
     dest, src = basic_addresses
 
-    # Basic encoding (non-last and last address)
-    # DEST-1 (not last): SSID byte = 0x82 (SSID=1, extension=0, reserved=1, C=0, H=0)
-    # Fixed: was 0x62, now 0x82 (bit 7 set)
-    assert dest.encode(last=False)[-1] == 0x82
-    # SRC-2 (last): SSID byte = 0x85 (SSID=2, extension=1, reserved=1, C=0, H=0)
-    # Fixed: was 0x65, now 0x85 (bit 7 set)
-    assert src.encode(last=True)[-1] == 0x85
+    # With reserved bit set (0x80)
+    assert dest.encode(last=False)[-1] == 0x82  # SSID=1, reserved=1, ext=0
+    assert src.encode(last=True)[-1] == 0x85     # SSID=2, reserved=1, ext=1
 
     # With C-bit and H-bit
     addr = AX25Address("TEST", ssid=3, c_bit=True, h_bit=True)
     encoded = addr.encode(last=True)
-    # SSID byte: reserved=1 (bit7), C=1 (bit6), H=1 (bit5), SSID=3 (bits4-1), extension=1 (bit0) = 0xE7
-    assert encoded[-1] == 0xE7
+    assert encoded[-1] == 0xE7  # All bits set correctly
 
 
 def test_address_decoding():
     """Test AX25Address decoding."""
-    # Basic decode
-    # SSID byte should have bit 7=1 (reserved), so 0x82 not 0x62
-    data = b'\x88\x8a\xa6\xa8@@\x82'  # DEST-1 not last, with reserved bit set
+    # Basic decode - DEST-1
+    data = b'\x88\x8a\xa6\xa8@@\x82'
     addr, is_last = AX25Address.decode(data)
     assert addr.callsign == "DEST"
     assert addr.ssid == 1
@@ -97,8 +79,8 @@ def test_address_decoding():
     assert addr.h_bit == False
     assert is_last == False
 
-    # Last address with C and H bits
-    data = b'\x9c\x9c\x9c\x9c@@\xE7'  # TEST-3 last, C=1, H=1
+    # TEST-3 with C=1, H=1 - CORRECTED encoding
+    data = b'\xa8\x8a\xa6\xa8@@\xE7'  # TEST encoded correctly
     addr, is_last = AX25Address.decode(data)
     assert addr.callsign == "TEST"
     assert addr.ssid == 3
@@ -114,7 +96,6 @@ def test_address_decoding():
 def test_fcs_calculation():
     """Test FCS calculation and verification."""
     test_data = b'ABCDEF'
-    # Note: Using sample data - actual address bytes would be shift-encoded
     fcs = fcs_calc(test_data)
     assert isinstance(fcs, int)
     assert 0 <= fcs <= 0xFFFF
@@ -128,47 +109,41 @@ def test_fcs_calculation():
 
 def test_bit_stuffing():
     """
-    Test bit stuffing and destuffing.
+    Test frame round-trip (bit stuffing handled by hardware).
     
-    NOTE: In HDLC/AX.25, bit stuffing is tested via full frame encode/decode,
-    not standalone. The destuffing knows when to stop based on FCS position.
-    This test now uses complete frames to properly test the stuffing logic.
+    NOTE: Bit stuffing is NOT done in software. It's handled by the
+    HDLC hardware (TNC). Software frames are transmitted as-is.
     """
-    # Test with a complete frame that will trigger stuffing
     dest = AX25Address("TEST")
     src = AX25Address("TEST")
-    
-    # Create a frame with data that has consecutive ones
+
+    # Frame with flag bytes in info field - NO stuffing applied in software
     frame = AX25Frame(
         destination=dest,
         source=src,
-        control=0x03,  # UI
+        control=0x03,
         pid=0xF0,
-        info=bytes([0x7E, 0x7E, 0x7E]),  # Flags that need stuffing
+        info=bytes([0x7E, 0x7E, 0x7E]),
         config=DEFAULT_CONFIG_MOD8
     )
-    
-    # Encode and decode - this tests stuffing/destuffing in context
+
     encoded = frame.encode()
     decoded = AX25Frame.decode(encoded, DEFAULT_CONFIG_MOD8)
-    
-    # Verify round-trip works
+
+    # Should round-trip correctly
     assert decoded.info == bytes([0x7E, 0x7E, 0x7E])
-    
-    # Test that stuffing actually happened (encoded should be longer than raw)
-    # The middle portion (between flags) should have stuffing bits
-    assert len(encoded) > 16  # Basic sanity check
+    assert decoded.destination.callsign == "TEST"
+    assert decoded.source.callsign == "TEST"
 
 
 def test_frame_roundtrip(basic_addresses):
     """Test full frame encode/decode cycle."""
     dest, src = basic_addresses
 
-    # Basic UI frame
     frame = AX25Frame(
         destination=dest,
         source=src,
-        control=0x03,  # UI
+        control=0x03,
         pid=0xF0,
         info=b"Hello PyAX25_22",
     )
@@ -205,12 +180,16 @@ def test_frame_roundtrip(basic_addresses):
 
 def test_i_frame():
     """Test I-frame specific encoding."""
-    # Mod 8 I-frame N(S)=3, N(R)=5, P=1
     control = (3 << 1) | (5 << 5) | 0x10
-    # Create addresses for required args
     dest = AX25Address("DEST")
     src = AX25Address("SRC")
-    frame = AX25Frame(destination=dest, source=src, control=control, pid=0xF0, config=DEFAULT_CONFIG_MOD8)
+    frame = AX25Frame(
+        destination=dest,
+        source=src,
+        control=control,
+        pid=0xF0,
+        config=DEFAULT_CONFIG_MOD8
+    )
     encoded = frame.encode()
 
     decoded = AX25Frame.decode(encoded)
@@ -221,11 +200,16 @@ def test_extended_mod128():
     """Test modulo 128 extended control field."""
     from pyax25_22.core.config import AX25Config
     config_mod128 = AX25Config(modulo=128)
-    # Extended I-frame N(S)=100, N(R)=120, P=1
-    control = (100 << 1) | (120 << 9) | 0x100  # 16-bit control
+    control = (100 << 1) | (120 << 9) | 0x100
     dest = AX25Address("DEST")
     src = AX25Address("SRC")
-    frame = AX25Frame(destination=dest, source=src, control=control, pid=0xF0, config=config_mod128)
+    frame = AX25Frame(
+        destination=dest,
+        source=src,
+        control=control,
+        pid=0xF0,
+        config=config_mod128
+    )
     encoded = frame.encode()
 
     decoded = AX25Frame.decode(encoded, config=config_mod128)
