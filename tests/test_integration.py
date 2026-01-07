@@ -62,7 +62,7 @@ class MockTransport:
         self.sent_frames = []
         self.received_frames = []
 
-    def send_frame(self, frame: bytes):
+    def send_frame(self, frame):
         self.sent_frames.append(frame)
 
     def receive_frame(self):
@@ -70,8 +70,9 @@ class MockTransport:
             return self.received_frames.pop(0)
         return None
 
-    def inject_frame(self, frame: bytes):
+    def inject_frame(self, frame):
         self.received_frames.append(frame)
+
 
 @pytest.mark.asyncio
 async def test_full_connected_lifecycle(mock_connection_mod8):

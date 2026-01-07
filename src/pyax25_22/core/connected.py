@@ -39,7 +39,6 @@ from .exceptions import (
 
 logger = logging.getLogger(__name__)
 
-
 class AX25Connection:
     """
     Represents a single connected AX.25 session.
@@ -113,7 +112,7 @@ class AX25Connection:
             config=self.config,
         )
 
-        self._send_frame(sabm_frame)
+        await self._send_frame(sabm_frame)
         self.timers.start_t1_sync(self._on_t1_timeout)
         logger.info("Connection request sent (SABM/SABME)")
         return sabm_frame
@@ -133,7 +132,7 @@ class AX25Connection:
             config=self.config,
         )
 
-        self._send_frame(disc_frame)
+        await self._send_frame(disc_frame)
         self.timers.start_t1_sync(self._on_t1_timeout)
         logger.info("Disconnection request sent (DISC)")
         return disc_frame
@@ -158,7 +157,7 @@ class AX25Connection:
 
             data = self.outgoing_queue.pop(0)
             i_frame = self._build_i_frame(data, p_bit=False)
-            self._send_frame(i_frame)
+            await self._send_frame(i_frame)
             self.flow.send_data(self.v_s)
             self.v_s = (self.v_s + 1) % (128 if self.config.modulo == 128 else 8)
 
@@ -325,3 +324,24 @@ class AX25Connection:
     def _retransmit_specific(self, nr: int) -> None:
         """Retransmit specific frame after SREJ."""
         logger.warning(f"SREJ received - retransmitting frame {nr}")
+
+@property
+def state(self):
+    """Get the current state from the state machine."""
+    return self.sm.state
+
+async def _process_incoming(self):
+    """Process incoming frames from the transport."""
+    if self.transport:
+        frame_data = self.transport.receive_frame()
+        if frame_data:
+            frame = AX25Frame.decode(frame_data, self.config)
+            self.process_frame(frame)
+
+async def _process_timers(self):
+    """Process any pending timer events."""
+    # The timers will call their callbacks automatically
+    # This is just a placeholder for the test interface
+    pass
+
+
