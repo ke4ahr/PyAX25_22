@@ -1,149 +1,200 @@
-# SPDX-License-Identifier: LGPL-3.0-or-later
-# Copyright (C) 2025-2026 Kris Kirby, KE4AHR
+# tests/test_statemachine.py
 
-"""
-pyax25_22.core.statemachine.py
+Unit tests for the AX.25 state machine.
 
-AX.25 v2.2 Layer 2 state machine implementation.
-
-Implements all states and transitions per AX.25 v2.2 SDL diagrams.
-
-States:
-- DISCONNECTED
-- AWAITING_CONNECTION
-- AWAITING_RELEASE
-- CONNECTED
-- TIMER_RECOVERY
-- AWAITING_XID
-"""
-
-from __future__ import annotations
-
-from enum import Enum
-import logging
-
-from .exceptions import ConnectionStateError
-
-logger = logging.getLogger(__name__)
+Covers all states and transitions per AX.25 v2.2 SDL diagrams.
 
 
-class AX25State(Enum):
-    DISCONNECTED = "disconnected"
-    AWAITING_CONNECTION = "awaiting_connection"
-    AWAITING_RELEASE = "awaiting_release"
-    CONNECTED = "connected"
-    TIMER_RECOVERY = "timer_recovery"
-    AWAITING_XID = "awaiting_xid"
+    import pytest
+
+    from pyax25_22.core.statemachine import AX25StateMachine, AX25State
+    from pyax25_22.core.exceptions import ConnectionStateError
 
 
-class AX25StateMachine:
-    """AX.25 Layer 2 state machine."""
+    @pytest.fixture
+    def sm_mod8():
+        """State machine with modulo 8."""
+        return AX25StateMachine(layer3_initiated=True)
 
-    def __init__(self, layer3_initiated: bool = True):
-        self.layer3_initiated = layer3_initiated
-        self.state = AX25State.DISCONNECTED
-        self.modulo = 8
-        self.modulo_mask = 0x07
-        self.v_s = self.v_r = self.v_a = 0
-        self.peer_busy = False
-        self.reject_sent = False
-        self.srej_sent = False
 
-    def increment_vs(self) -> None:
-        """Increment V(S) with modulo wrap."""
-        self.v_s = (self.v_s + 1) & self.modulo_mask
+    @pytest.fixture
+    def sm_mod128():
+        """State machine with modulo 128."""
+        sm = AX25StateMachine(layer3_initiated=True)
+        sm.modulo = 128
+        return sm
 
-    def transition(self, event: str, frame_type: Optional[str] = None) -> None:
-        """Perform state transition based on event.
 
-        Validates transitions per AX.25 v2.2 SDL diagrams.
-        """
-        old_state = self.state
-        logger.debug(f"Transition attempt: {old_state.value} --[{event}]--> ?")
+    def test_initial_state(sm_mod8):
+        """Initial state is DISCONNECTED."""
+        assert sm_mod8.state == AX25State.DISCONNECTED
 
-        # Map legacy supervisory events for backward compatibility
-        if event.endswith("_received") and event[:-9] in {"RR", "RNR", "REJ", "SREJ"}:
-            frame_type = event[:-9]
-            event = "supervisory_received"
 
-        # DISCONNECTED state transitions
-        if self.state == AX25State.DISCONNECTED:
-            if event == "connect_request":
-                if not self.layer3_initiated:
-                    raise ConnectionStateError("Connect request not allowed without layer3 initiation")
-                self.state = AX25State.AWAITING_CONNECTION
-                self.v_s = self.v_r = self.v_a = 0
-                self.peer_busy = self.reject_sent = self.srej_sent = False
-            elif event in ("SABM_received", "SABME_received"):
-                self.state = AX25State.CONNECTED
-                self.v_s = self.v_r = self.v_a = 0
-                self.peer_busy = self.reject_sent = self.srej_sent = False
-            elif event == "DISC_received":
-                # Send DM response, remain disconnected
-                pass
-            else:
-                raise ConnectionStateError(f"Invalid event '{event}' in DISCONNECTED")
+    def test_connect_request_without_layer3(sm_mod8):
+        """Connect request without layer3_initiated raises error."""
+        sm = AX25StateMachine(layer3_initiated=False)
+        with pytest.raises(ConnectionStateError):
+            sm.transition("connect_request")
 
-        # AWAITING_CONNECTION transitions
-        elif self.state == AX25State.AWAITING_CONNECTION:
-            if event in ("UA_received", "DM_received", "FRMR_received"):
-                self.state = AX25State.DISCONNECTED
-            elif event == "T1_timeout":
-                self.state = AX25State.DISCONNECTED
-            else:
-                raise ConnectionStateError(f"Invalid event '{event}' in AWAITING_CONNECTION")
 
-        # CONNECTED transitions
-        elif self.state == AX25State.CONNECTED:
-            if event == "disconnect_request":
-                self.state = AX25State.AWAITING_RELEASE
-            elif event == "DISC_received":
-                self.state = AX25State.DISCONNECTED
-            elif event == "T3_timeout":
-                # Probe channel state
-                pass
-            elif event == "T1_timeout":
-                self.state = AX25State.TIMER_RECOVERY
-            elif event == "supervisory_received":
-                if frame_type == "RNR":
-                    self.peer_busy = True
-                elif frame_type == "RR":
-                    self.peer_busy = False
-                elif frame_type == "REJ":
-                    self.reject_sent = True
-                elif frame_type == "SREJ":
-                    self.srej_sent = True
-            else:
-                raise ConnectionStateError(f"Invalid event '{event}' in CONNECTED")
+    def test_connect_request(sm_mod8):
+        """Connect request from DISCONNECTED -> AWAITING_CONNECTION."""
+        sm_mod8.transition("connect_request")
+        assert sm_mod8.state == AX25State.AWAITING_CONNECTION
 
-        # TIMER_RECOVERY transitions
-        elif self.state == AX25State.TIMER_RECOVERY:
-            if event == "ack_received":
-                self.state = AX25State.CONNECTED
-            elif event == "T1_timeout":
-                self.state = AX25State.CONNECTED
-            else:
-                raise ConnectionStateError(f"Invalid event '{event}' in TIMER_RECOVERY")
 
-        # AWAITING_RELEASE transitions
-        elif self.state == AX25State.AWAITING_RELEASE:
-            if event == "UA_received":
-                self.state = AX25State.DISCONNECTED
-            elif event == "T1_timeout":
-                self.state = AX25State.DISCONNECTED
-            else:
-                raise ConnectionStateError(f"Invalid event '{event}' in AWAITING_RELEASE")
+    def test_sabm_received_from_disconnected(sm_mod8):
+        """SABM received -> CONNECTED."""
+        sm_mod8.transition("SABM_received")
+        assert sm_mod8.state == AX25State.CONNECTED
 
-        # AWAITING_XID transitions
-        elif self.state == AX25State.AWAITING_XID:
-            if event == "XID_received":
-                self.state = AX25State.CONNECTED
-            elif event == "T1_timeout":
-                self.state = AX25State.DISCONNECTED
-            else:
-                raise ConnectionStateError(f"Invalid event '{event}' in AWAITING_XID")
 
-        else:
-            raise ConnectionStateError(f"Unknown state {self.state}")
+    def test_sabme_received_mod128(sm_mod128):
+        """SABME received -> CONNECTED (mod128)."""
+        sm_mod128.transition("SABME_received")
+        assert sm_mod128.state == AX25State.CONNECTED
 
-        logger.debug(f"Transition: {old_state.value} -> {self.state.value}")
+
+    def test_disc_from_disconnected(sm_mod8):
+        """DISC in DISCONNECTED is ignored."""
+        sm_mod8.transition("DISC_received")  # No change
+        assert sm_mod8.state == AX25State.DISCONNECTED
+
+
+    def test_ua_from_awaiting_connection(sm_mod8):
+        """UA in AWAITING_CONNECTION -> DISCONNECTED."""
+        sm_mod8.transition("connect_request")
+        sm_mod8.transition("UA_received")
+        assert sm_mod8.state == AX25State.DISCONNECTED
+
+
+    def test_timeout_from_awaiting_connection(sm_mod8):
+        """T1 timeout in AWAITING_CONNECTION -> DISCONNECTED."""
+        sm_mod8.transition("connect_request")
+        sm_mod8.transition("T1_timeout")
+        assert sm_mod8.state == AX25State.DISCONNECTED
+
+
+    def test_disconnect_request_from_connected(sm_mod8):
+        """Disconnect request in CONNECTED -> AWAITING_RELEASE."""
+        sm_mod8.transition("SABM_received")
+        sm_mod8.transition("disconnect_request")
+        assert sm_mod8.state == AX25State.AWAITING_RELEASE
+
+
+    def test_disc_from_connected(sm_mod8):
+        """DISC in CONNECTED -> DISCONNECTED."""
+        sm_mod8.transition("SABM_received")
+        sm_mod8.transition("DISC_received")
+        assert sm_mod8.state == AX25State.DISCONNECTED
+
+
+    def test_rnr_in_connected(sm_mod8):
+        """RNR supervisory in connected sets peer_busy."""
+        sm_mod8.transition("SABM_received")
+        assert not sm_mod8.peer_busy
+        sm_mod8.transition("supervisory_received", frame_type="RNR")
+        assert sm_mod8.peer_busy
+
+
+    def test_rr_in_connected(sm_mod8):
+        """RR supervisory in connected clears peer_busy."""
+        sm_mod8.transition("SABM_received")
+        sm_mod8.peer_busy = True
+        sm_mod8.transition("supervisory_received", frame_type="RR")
+        assert not sm_mod8.peer_busy
+
+
+    def test_rej_in_connected(sm_mod8):
+        """REJ supervisory in connected sets reject_sent."""
+        sm_mod8.transition("SABM_received")
+        assert not sm_mod8.reject_sent
+        sm_mod8.transition("supervisory_received", frame_type="REJ")
+        assert sm_mod8.reject_sent
+
+
+    def test_srej_in_connected(sm_mod8):
+        """SREJ supervisory in connected sets srej_sent."""
+        sm_mod8.transition("SABM_received")
+        assert not sm_mod8.srej_sent
+        sm_mod8.transition("supervisory_received", frame_type="SREJ")
+        assert sm_mod8.srej_sent
+
+
+    def test_t1_timeout_from_connected(sm_mod8):
+        """T1 timeout in CONNECTED -> TIMER_RECOVERY."""
+        sm_mod8.transition("SABM_received")
+        sm_mod8.transition("T1_timeout")
+        assert sm_mod8.state == AX25State.TIMER_RECOVERY
+
+
+    def test_ack_response_from_timer_recovery(sm_mod8):
+        """Ack in TIMER_RECOVERY -> CONNECTED."""
+        sm_mod8.transition("SABM_received")
+        sm_mod8.transition("T1_timeout")
+        sm_mod8.transition("ack_received")
+        assert sm_mod8.state == AX25State.CONNECTED
+
+
+    def test_t1_timeout_from_timer_recovery(sm_mod8):
+        """T1 timeout in TIMER_RECOVERY -> CONNECTED."""
+        sm_mod8.transition("SABM_received")
+        sm_mod8.transition("T1_timeout")
+        sm_mod8.transition("T1_timeout")
+        assert sm_mod8.state == AX25State.CONNECTED
+
+
+    def test_ua_from_awaiting_release(sm_mod8):
+        """UA in AWAITING_RELEASE -> DISCONNECTED."""
+        sm_mod8.transition("SABM_received")
+        sm_mod8.transition("disconnect_request")
+        sm_mod8.transition("UA_received")
+        assert sm_mod8.state == AX25State.DISCONNECTED
+
+
+    def test_t1_timeout_from_awaiting_release(sm_mod8):
+        """T1 timeout in AWAITING_RELEASE -> DISCONNECTED."""
+        sm_mod8.transition("SABM_received")
+        sm_mod8.transition("disconnect_request")
+        sm_mod8.transition("T1_timeout")
+        assert sm_mod8.state == AX25State.DISCONNECTED
+
+
+    def test_xid_from_awaiting_xid(sm_mod8):
+        """XID in AWAITING_XID -> CONNECTED."""
+        sm_mod8.state = AX25State.AWAITING_XID
+        sm_mod8.transition("XID_received")
+        assert sm_mod8.state == AX25State.CONNECTED
+
+
+    def test_t1_timeout_from_awaiting_xid(sm_mod8):
+        """T1 timeout in AWAITING_XID -> DISCONNECTED."""
+        sm_mod8.state = AX25State.AWAITING_XID
+        sm_mod8.transition("T1_timeout")
+        assert sm_mod8.state == AX25State.DISCONNECTED
+
+
+    def test_invalid_event_raises_error(sm_mod8):
+        """Invalid event raises ConnectionStateError."""
+        with pytest.raises(ConnectionStateError):
+            sm_mod8.transition("invalid_event")
+
+
+    def test_sequence_increment_mod8(sm_mod8):
+        """Sequence numbers wrap at 7 in mod8."""
+        sm_mod8.v_s = 7
+        sm_mod8.increment_vs()
+        assert sm_mod8.v_s == 0
+
+
+    def test_sequence_increment_mod128(sm_mod128):
+        """Sequence numbers wrap at 127 in mod128."""
+        sm_mod128.v_s = 127
+        sm_mod128.increment_vs()
+        assert sm_mod128.v_s == 0
+
+
+    def test_modulo_mask(sm_mod8, sm_mod128):
+        """Modulo mask is correct."""
+        assert sm_mod8.modulo_mask == 0x07
+        assert sm_mod128.modulo_mask == 0x7F"
