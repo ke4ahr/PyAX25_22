@@ -98,7 +98,7 @@ class AX25Connection:
             f"{remote_addr.callsign}-{remote_addr.ssid}, initiate={initiate}"
         )
 
-    def connect(self) -> AX25Frame:
+    async def connect(self) -> AX25Frame:
         """Initiate connection by sending SABM/SABME."""
         if self.sm.state != AX25State.AWAITING_CONNECTION:
             raise ConnectionStateError(
@@ -118,7 +118,7 @@ class AX25Connection:
         logger.info("Connection request sent (SABM/SABME)")
         return sabm_frame
 
-    def disconnect(self) -> AX25Frame:
+    async def disconnect(self) -> AX25Frame:
         """Initiate graceful disconnection."""
         if self.sm.state not in (AX25State.CONNECTED, AX25State.TIMER_RECOVERY):
             raise ConnectionStateError(
@@ -138,7 +138,7 @@ class AX25Connection:
         logger.info("Disconnection request sent (DISC)")
         return disc_frame
 
-    def send_data(self, data: bytes) -> None:
+    async def send_data(self, data: bytes) -> None:
         """Queue application data for transmission."""
         if self.sm.state != AX25State.CONNECTED:
             raise ConnectionStateError("Not connected")
@@ -150,7 +150,7 @@ class AX25Connection:
         self._transmit_pending()
         logger.debug(f"Queued {len(data)} bytes for transmission")
 
-    def _transmit_pending(self) -> None:
+    async def _transmit_pending(self) -> None:
         """Transmit as many I-frames as window allows."""
         while (len(self.flow.outstanding) < self.config.window_size
                and self.outgoing_queue
@@ -270,7 +270,7 @@ class AX25Connection:
         self.flow.receive_ack(nr)
         self._send_rr(f_bit=p_bit)
 
-    def _send_frame(self, frame: AX25Frame) -> None:
+    async def _send_frame(self, frame: AX25Frame) -> None:
         """Send frame via transport if available, otherwise log."""
         if self.transport:
             self.transport.send_frame(frame)
