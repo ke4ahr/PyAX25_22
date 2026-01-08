@@ -387,12 +387,15 @@ class AX25Connection:
         self.retry_count += 1
         if self.retry_count >= self.config.retry_count:
             self.sm.transition("T1_timeout")  # Final timeout leads to disconnect
+        else:
+            # Restart T1 timer for next retry
+            self.timers.start_t1_sync(self._on_t1_timeout)
 
     def _retransmit_all(self) -> None:
         """Retransmit all outstanding frames."""
         logger.warning("Retransmitting all outstanding frames")
         # Implementation would resend from v_a
-        # For testing, we'll just send the SABM frame again
+        # For testing, we'll just send the SABM frame again if in AWAITING_CONNECTION
         if self.sm.state == AX25State.AWAITING_CONNECTION:
             control = 0x2F if self.config.modulo == 8 else 0x6F  # SABM/SABME with P=1
             sabm_frame = AX25Frame(
