@@ -2,7 +2,7 @@
 # Copyright (C) 2025-2026 Kris Kirby, KE4AHR
 
 """
-pyax25_22.core.flow_control.py
+pyax25_22/core/flow_control.py
 
 AX.25 v2.2 compliant flow control and selective reject implementation.
 
@@ -53,7 +53,8 @@ class AX25FlowControl:
     def can_send_i_frame(self) -> bool:
         return self.window_available > 0 and not self.peer_busy
 
-    def send_data(self, seq_num: int) -> None:
+    def enqueue_i_frame(self, seq_num: int) -> None:
+        """Enqueue an I-frame for transmission."""
         if not self.can_send_i_frame():
             raise FrameError("Cannot enqueue: window full or peer busy")
         self.outstanding_seqs.append(seq_num)

@@ -2,7 +2,7 @@
 # Copyright (C) 2025-2026 Kris Kirby, KE4AHR
 
 """
-pyax25_22.core.connected.py
+pyax25_22/core/connected.py
 
 Connected-mode AX.25 session management per AX.25 v2.2 specification.
 
@@ -161,7 +161,7 @@ class AX25Connection:
             data = self.outgoing_queue.pop(0)
             i_frame = self._build_i_frame(data, p_bit=False)
             await self._send_frame(i_frame)
-            self.flow.send_data(self.v_s)
+            self.flow.enqueue_i_frame(self.v_s)  # Changed from send_data to enqueue_i_frame
             self.v_s = (self.v_s + 1) % (128 if self.config.modulo == 128 else 8)
 
             # Start T1 if first outstanding frame
