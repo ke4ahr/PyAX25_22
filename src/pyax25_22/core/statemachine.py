@@ -161,7 +161,7 @@ class AX25StateMachine:
 
         logger.debug(f"Transition: {old_state.value} -> {self.state.value}")
 
-The key change made in this file is in the AWAITING_CONNECTION state transitions section:
+# The key change made in this file is in the AWAITING_CONNECTION state transitions section:
 
 elif self.state == AX25State.AWAITING_CONNECTION:
     if event == "UA_received":
