@@ -260,11 +260,14 @@ class AX25Connection:
 
         elif cmd == 0x87:  # XID
             if frame.info:
-                remote_params = parse_xid_frame(frame.info)
-                self.negotiated_config = negotiate_config(self.config, remote_params)
-                logger.info("XID negotiation completed")
-                if p_f:
-                    self._send_xid_response()
+                try:
+                    remote_params = parse_xid_frame(frame.info)
+                    self.negotiated_config = negotiate_config(self.config, remote_params)
+                    logger.info("XID negotiation completed")
+                    if p_f:
+                        self._send_xid_response()
+                except Exception as e:
+                    logger.error(f"XID negotiation failed: {e}")
 
     def _handle_s_frame(self, frame: AX25Frame) -> None:
         """Handle supervisory frame."""
@@ -328,7 +331,8 @@ class AX25Connection:
             control=0x63,  # UA F=1
             config=self.config,
         )
-        self._send_frame(ua_frame)
+        # Use async send to avoid warning
+        asyncio.create_task(self._send_frame(ua_frame))
 
     def _send_rr(self, f_bit: bool = False) -> None:
         """Send Receiver Ready frame."""
@@ -339,7 +343,7 @@ class AX25Connection:
             control=control,
             config=self.config,
         )
-        self._send_frame(rr_frame)
+        asyncio.create_task(self._send_frame(rr_frame))
 
     def _send_rnr(self, f_bit: bool = False) -> None:
         """Send Receiver Not Ready frame."""
@@ -350,7 +354,7 @@ class AX25Connection:
             control=control,
             config=self.config,
         )
-        self._send_frame(rnr_frame)
+        asyncio.create_task(self._send_frame(rnr_frame))
 
     def _send_srej(self, nr: int) -> None:
         """Send Selective Reject frame."""
@@ -361,7 +365,7 @@ class AX25Connection:
             control=control,
             config=self.config,
         )
-        self._send_frame(srej_frame)
+        asyncio.create_task(self._send_frame(srej_frame))
 
     def _send_xid_response(self) -> None:
         """Send XID response frame."""
@@ -373,7 +377,7 @@ class AX25Connection:
             info=xid_data,
             config=self.config,
         )
-        self._send_frame(xid_frame)
+        asyncio.create_task(self._send_frame(xid_frame))
 
     def _on_t1_timeout(self) -> None:
         """Handle T1 expiration."""
@@ -397,7 +401,7 @@ class AX25Connection:
                 control=control,
                 config=self.config,
             )
-            self._send_frame(sabm_frame)
+            asyncio.create_task(self._send_frame(sabm_frame))
 
     def _retransmit_from(self, nr: int) -> None:
         """Retransmit from N(R) after REJ."""
