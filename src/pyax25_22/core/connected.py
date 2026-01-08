@@ -242,7 +242,8 @@ class AX25Connection:
         if frame_type == 0x03 and cmd in (0x2F, 0x6F):
             # This is SABM/SABME (U-frame with command)
             # Only process as incoming connection if we're not already trying to connect
-            if self.sm.state != AX25State.AWAITING_CONNECTION:
+            # AND if the P/F bit is set (indicating it's a command, not response)
+            if self.sm.state != AX25State.AWAITING_CONNECTION and p_f:
                 self.sm.transition("SABM_received" if cmd == 0x2F else "SABME_received")
                 self.config = AX25Config(modulo=8 if cmd == 0x2F else 128)
                 self._send_ua()
@@ -250,6 +251,7 @@ class AX25Connection:
         # UA is also 0x03 but with different command bytes (0x63, 0x6F)
         elif frame_type == 0x03 and cmd in (0x63, 0x6F):
             # This is UA (U-frame with response)
+            # UA responses have F=1 (same as P=1 in the bit position)
             if self.sm.state == AX25State.AWAITING_CONNECTION:
                 self.sm.transition("UA_received")
                 self.timers.stop_t1_sync()
