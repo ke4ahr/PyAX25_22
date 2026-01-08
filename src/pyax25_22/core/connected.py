@@ -159,11 +159,16 @@ class AX25Connection:
         if len(data) > self.config.max_frame:
             raise FrameError(f"Data exceeds N1={self.config.max_frame}")
 
+        # Don't queue empty data
+        if not data:
+            logger.warning("Attempt to send empty data")
+            return
+
         self.outgoing_queue.append(data)
         # Only transmit if peer is not busy
         if not self.peer_busy:
             await self._transmit_pending()
-        logger.debug(f"Queued {len(data)} bytes for transmission")
+        logger.debug(f"Queued {len(data)} bytes for transmission, queue size: {len(self.outgoing_queue)}")
 
     async def _transmit_pending(self) -> None:
         """Transmit as many I-frames as window allows."""
@@ -304,9 +309,14 @@ class AX25Connection:
         self._send_rr(f_bit=p_bit)
 
     async def _send_frame(self, frame: AX25Frame) -> None:
-        """Send frame via transport if available, otherwise log."""
+        """Send frame via transport with enhanced error handling."""
         if self.transport:
-            self.transport.send_frame(frame)
+            try:
+                self.transport.send_frame(frame)
+                logger.debug(f"Sent frame: {frame.control:02X} to {frame.destination.callsign}")
+            except Exception as e:
+                logger.error(f"Failed to send frame: {e}")
+                raise TransportError(f"Failed to send frame: {e}")
         else:
             logger.debug(f"Would send: {frame.encode().hex()}")
 
@@ -417,4 +427,3 @@ class AX25Connection:
         # The timers will call their callbacks automatically
         # This is just a placeholder for the test interface
         pass
-

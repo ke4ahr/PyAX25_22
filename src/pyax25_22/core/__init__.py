@@ -52,9 +52,9 @@ from .exceptions import (
 )
 
 # Version
-__version__ = "0.5.81"
+__version__ = "0.5.82"
 
-# Public API list – explicitly exported symbols
+# Public API list - explicitly exported symbols
 __all__ = [
     # Framing
     "AX25Frame",

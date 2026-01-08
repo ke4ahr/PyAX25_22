@@ -27,7 +27,6 @@ from .exceptions import TimeoutError
 
 logger = logging.getLogger(__name__)
 
-
 class AX25Timers:
     """
     Comprehensive timer manager for AX.25 connections.
@@ -77,17 +76,24 @@ class AX25Timers:
             callback: Function to call on timeout
         """
         self.stop_t1_sync()
-        self._t1_thread_timer = threading.Timer(self.rto, self._t1_timeout_handler(callback))
-        self._t1_thread_timer.daemon = True
-        self._t1_thread_timer.start()
-        logger.debug(f"T1 started (sync): {self.rto:.2f}s")
+        try:
+            self._t1_thread_timer = threading.Timer(self.rto, self._t1_timeout_handler(callback))
+            self._t1_thread_timer.daemon = True
+            self._t1_thread_timer.start()
+            logger.debug(f"T1 started (sync): {self.rto:.2f}s")
+        except Exception as e:
+            logger.error(f"Failed to start T1 timer: {e}")
+            raise TimeoutError(f"Failed to start T1 timer: {e}")
 
     def stop_t1_sync(self) -> None:
         """Stop T1 timer if running."""
         if self._t1_thread_timer:
-            self._t1_thread_timer.cancel()
-            self._t1_thread_timer = None
-            logger.debug("T1 stopped (sync)")
+            try:
+                self._t1_thread_timer.cancel()
+                self._t1_thread_timer = None
+                logger.debug("T1 stopped (sync)")
+            except Exception as e:
+                logger.error(f"Error stopping T1 timer: {e}")
 
     def start_t3_sync(self, callback: Callable[[], None]) -> None:
         """
@@ -97,17 +103,24 @@ class AX25Timers:
             callback: Function to call on timeout
         """
         self.stop_t3_sync()
-        self._t3_thread_timer = threading.Timer(self.t3_current, self._t3_timeout_handler(callback))
-        self._t3_thread_timer.daemon = True
-        self._t3_thread_timer.start()
-        logger.debug(f"T3 started (sync): {self.t3_current}s")
+        try:
+            self._t3_thread_timer = threading.Timer(self.t3_current, self._t3_timeout_handler(callback))
+            self._t3_thread_timer.daemon = True
+            self._t3_thread_timer.start()
+            logger.debug(f"T3 started (sync): {self.t3_current}s")
+        except Exception as e:
+            logger.error(f"Failed to start T3 timer: {e}")
+            raise TimeoutError(f"Failed to start T3 timer: {e}")
 
     def stop_t3_sync(self) -> None:
         """Stop T3 timer if running."""
         if self._t3_thread_timer:
-            self._t3_thread_timer.cancel()
-            self._t3_thread_timer = None
-            logger.debug("T3 stopped (sync)")
+            try:
+                self._t3_thread_timer.cancel()
+                self._t3_thread_timer = None
+                logger.debug("T3 stopped (sync)")
+            except Exception as e:
+                logger.error(f"Error stopping T3 timer: {e}")
 
     # Asynchronous timer operations
 
@@ -119,19 +132,26 @@ class AX25Timers:
             callback: Async function to call on timeout
         """
         self.stop_t1_async()
-        self._t1_async_task = asyncio.create_task(self._t1_async_wait(callback))
-        logger.debug(f"T1 started (async): {self.rto:.2f}s")
+        try:
+            self._t1_async_task = asyncio.create_task(self._t1_async_wait(callback))
+            logger.debug(f"T1 started (async): {self.rto:.2f}s")
+        except Exception as e:
+            logger.error(f"Failed to start async T1 timer: {e}")
+            raise TimeoutError(f"Failed to start async T1 timer: {e}")
 
     async def stop_t1_async(self) -> None:
         """Cancel T1 async task if running."""
         if self._t1_async_task:
-            self._t1_async_task.cancel()
             try:
+                self._t1_async_task.cancel()
                 await self._t1_async_task
             except asyncio.CancelledError:
                 pass
-            self._t1_async_task = None
-            logger.debug("T1 stopped (async)")
+            except Exception as e:
+                logger.error(f"Error stopping async T1 timer: {e}")
+            finally:
+                self._t1_async_task = None
+                logger.debug("T1 stopped (async)")
 
     async def start_t3_async(self, callback: Callable[[], Coroutine[None, None, None]]) -> None:
         """
@@ -141,35 +161,48 @@ class AX25Timers:
             callback: Async function to call on timeout
         """
         self.stop_t3_async()
-        self._t3_async_task = asyncio.create_task(self._t3_async_wait(callback))
-        logger.debug(f"T3 started (async): {self.t3_current}s")
+        try:
+            self._t3_async_task = asyncio.create_task(self._t3_async_wait(callback))
+            logger.debug(f"T3 started (async): {self.t3_current}s")
+        except Exception as e:
+            logger.error(f"Failed to start async T3 timer: {e}")
+            raise TimeoutError(f"Failed to start async T3 timer: {e}")
 
     async def stop_t3_async(self) -> None:
         """Cancel T3 async task if running."""
         if self._t3_async_task:
-            self._t3_async_task.cancel()
             try:
+                self._t3_async_task.cancel()
                 await self._t3_async_task
             except asyncio.CancelledError:
                 pass
-            self._t3_async_task = None
-            logger.debug("T3 stopped (async)")
+            except Exception as e:
+                logger.error(f"Error stopping async T3 timer: {e}")
+            finally:
+                self._t3_async_task = None
+                logger.debug("T3 stopped (async)")
 
     # Internal handlers
 
     def _t1_timeout_handler(self, callback: Callable[[], None]) -> Callable[[], None]:
         """Create thread-safe T1 timeout handler."""
         def handler() -> None:
-            logger.warning(f"T1 timeout after {self.rto:.2f}s")
-            callback()
-            raise TimeoutError("T1 acknowledgment timeout")
+            try:
+                logger.warning(f"T1 timeout after {self.rto:.2f}s")
+                callback()
+            except Exception as e:
+                logger.error(f"T1 timeout handler failed: {e}")
+                raise TimeoutError("T1 acknowledgment timeout")
         return handler
 
     def _t3_timeout_handler(self, callback: Callable[[], None]) -> Callable[[], None]:
         """Create thread-safe T3 timeout handler."""
         def handler() -> None:
-            logger.warning(f"T3 idle timeout after {self.t3_current}s")
-            callback()
+            try:
+                logger.warning(f"T3 idle timeout after {self.t3_current}s")
+                callback()
+            except Exception as e:
+                logger.error(f"T3 timeout handler failed: {e}")
         return handler
 
     async def _t1_async_wait(self, callback: Callable[[], Coroutine[None, None, None]]) -> None:
@@ -181,6 +214,9 @@ class AX25Timers:
             raise TimeoutError("Async T1 acknowledgment timeout")
         except asyncio.CancelledError:
             logger.debug("Async T1 cancelled")
+        except Exception as e:
+            logger.error(f"Async T1 wait failed: {e}")
+            raise TimeoutError(f"Async T1 wait failed: {e}")
 
     async def _t3_async_wait(self, callback: Callable[[], Coroutine[None, None, None]]) -> None:
         """Async implementation of T3 timeout."""
@@ -190,6 +226,8 @@ class AX25Timers:
             await callback()
         except asyncio.CancelledError:
             logger.debug("Async T3 cancelled")
+        except Exception as e:
+            logger.error(f"Async T3 wait failed: {e}")
 
     # RTT measurement and adaptation
 
@@ -207,6 +245,9 @@ class AX25Timers:
         self.rttvar += 0.25 * (abs(delta) - self.rttvar)
         self.rto = self.srtt + max(1.0, 4 * self.rttvar)
 
+        # Apply bounds to prevent extreme values
+        self.rto = max(1.0, min(self.rto, 60.0))  # 1s min, 60s max
+
         self._last_ack_time = time.time()
         logger.debug(f"RTT recorded: {measured_rtt:.3f}s → SRTT={self.srtt:.3f}s, RTO={self.rto:.3f}s")
 
@@ -214,9 +255,68 @@ class AX25Timers:
         """Reset all timers and state."""
         self.stop_t1_sync()
         self.stop_t3_sync()
-        asyncio.run(self.stop_t1_async())
-        asyncio.run(self.stop_t3_async())
+
+        # Stop async timers if they're running
+        try:
+            asyncio.run(self.stop_t1_async())
+        except RuntimeError:
+            # No event loop running
+            pass
+
+        try:
+            asyncio.run(self.stop_t3_async())
+        except RuntimeError:
+            # No event loop running
+            pass
+
+        # Reset SRTT algorithm
         self.srtt = self.config.t1_timeout
         self.rttvar = self.config.t1_timeout / 2
         self.rto = self.srtt + max(1.0, 4 * self.rttvar)
+
         logger.info("Timers reset to initial state")
+
+    def update_t1_timeout(self, new_timeout: float) -> None:
+        """
+        Update T1 timeout value.
+
+        Args:
+            new_timeout: New T1 timeout in seconds
+        """
+        if not (0.1 <= new_timeout <= 60.0):
+            raise ValueError("T1 timeout must be between 0.1 and 60.0 seconds")
+
+        self.t1_current = new_timeout
+        self.rto = new_timeout  # Reset RTO to new base value
+        logger.info(f"T1 timeout updated to {new_timeout}s")
+
+    def update_t3_timeout(self, new_timeout: float) -> None:
+        """
+        Update T3 timeout value.
+
+        Args:
+            new_timeout: New T3 timeout in seconds
+        """
+        if not (10.0 <= new_timeout <= 3600.0):
+            raise ValueError("T3 timeout must be between 10.0 and 3600.0 seconds")
+
+        self.t3_current = new_timeout
+        logger.info(f"T3 timeout updated to {new_timeout}s")
+
+    def get_timer_status(self) -> dict:
+        """
+        Get current timer status.
+
+        Returns:
+            Dictionary containing timer status information
+        """
+        return {
+            't1_running': self._t1_thread_timer is not None or self._t1_async_task is not None,
+            't3_running': self._t3_thread_timer is not None or self._t3_async_task is not None,
+            't1_current': self.t1_current,
+            't3_current': self.t3_current,
+            'srtt': self.srtt,
+            'rttvar': self.rttvar,
+            'rto': self.rto,
+            'last_ack_time': self._last_ack_time
+        }

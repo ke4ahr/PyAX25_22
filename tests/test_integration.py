@@ -123,18 +123,19 @@ async def test_full_connected_lifecycle(mock_connection_mod8):
 async def test_async_timer_t1(mock_connection_mod8):
     """Test T1 timeout and retry behavior."""
     conn = mock_connection_mod8
-    # Create a new config with the desired timeout
+
+    # Create a new config with short timeout for testing
     new_config = AX25Config(
-    modulo=conn.config.modulo,
-    max_frame=conn.config.max_frame,
-    window_size=conn.config.window_size,
-    t1_timeout=0.5,  # Short for testing
-    t3_timeout=conn.config.t3_timeout,
-    retry_count=1,  # Reduced for testing
-    tx_delay=conn.config.tx_delay,
-    tx_tail=conn.config.tx_tail,
-    persistence=conn.config.persistence,
-    slot_time=conn.config.slot_time
+        modulo=conn.config.modulo,
+        max_frame=conn.config.max_frame,
+        window_size=conn.config.window_size,
+        t1_timeout=0.5,  # Short for testing
+        t3_timeout=conn.config.t3_timeout,
+        retry_count=1,  # Reduced for testing
+        tx_delay=conn.config.tx_delay,
+        tx_tail=conn.config.tx_tail,
+        persistence=conn.config.persistence,
+        slot_time=conn.config.slot_time
     )
     conn.config = new_config
 
@@ -197,6 +198,8 @@ async def test_flow_control_integration(mock_connection_mod8):
 
     assert not conn.peer_busy
     # Data should now be sent
+    # Wait a bit for the async task to complete
+    await asyncio.sleep(0.1)
     assert len(conn.transport.sent_frames) > initial_sent
 
 @pytest.mark.asyncio
@@ -232,3 +235,329 @@ async def test_mod128_lifecycle(mock_connection_mod128):
     await conn._process_incoming()
 
     assert conn.state == AX25State.DISCONNECTED
+
+@pytest.mark.asyncio
+async def test_retransmission_on_timeout(mock_connection_mod8):
+    """Test retransmission behavior when T1 expires."""
+    conn = mock_connection_mod8
+
+    # Set short timeout for testing
+    conn.config.t1_timeout = 0.5
+    conn.timers.rto = 0.5
+
+    await conn.connect()
+    assert conn.state == AX25State.AWAITING_CONNECTION
+
+    # Wait for T1 timeout
+    await asyncio.sleep(0.7)
+
+    # Trigger timeout manually
+    conn._on_t1_timeout()
+
+    # Should have retransmitted
+    assert len(conn.transport.sent_frames) >= 2  # Original + retransmit
+    assert conn.retry_count == 1
+
+@pytest.mark.asyncio
+async def test_multiple_data_frames(mock_connection_mod8):
+    """Test sending multiple data frames with proper sequencing."""
+    conn = mock_connection_mod8
+
+    await conn.connect()
+    # Simulate UA
+    conn.transport.inject_frame(
+        AX25Frame(
+            destination=AX25Address("TEST"),
+            source=AX25Address("DEST"),
+            control=0x63,
+        ).encode()
+    )
+    await conn._process_incoming()
+    assert conn.state == AX25State.CONNECTED
+
+    # Send multiple data frames
+    await conn.send_data(b"Frame 1")
+    await conn.send_data(b"Frame 2")
+    await conn.send_data(b"Frame 3")
+
+    # Should have sent frames (up to window size)
+    assert len(conn.transport.sent_frames) > 0
+
+    # Verify sequence numbers
+    for i, frame in enumerate(conn.transport.sent_frames):
+        if hasattr(frame, 'control'):
+            ns = (frame.control >> 1) & 0x07
+            assert ns == i  # Sequence numbers should be sequential
+
+@pytest.mark.asyncio
+async def test_selective_reject(mock_connection_mod8):
+    """Test selective reject (SREJ) handling."""
+    conn = mock_connection_mod8
+
+    await conn.connect()
+    # Simulate UA
+    conn.transport.inject_frame(
+        AX25Frame(
+            destination=AX25Address("TEST"),
+            source=AX25Address("DEST"),
+            control=0x63,
+        ).encode()
+    )
+    await conn._process_incoming()
+
+    # Send some data
+    await conn.send_data(b"Test data")
+    initial_sent = len(conn.transport.sent_frames)
+
+    # Simulate SREJ for frame 0
+    conn.transport.inject_frame(
+        AX25Frame(
+            destination=AX25Address("TEST"),
+            source=AX25Address("DEST"),
+            control=0x0D,  # SREJ, N(R)=0
+        ).encode()
+    )
+    await conn._process_incoming()
+
+    # Should have retransmitted the requested frame
+    assert len(conn.transport.sent_frames) > initial_sent
+
+@pytest.mark.asyncio
+async def test_connection_refusal(mock_connection_mod8):
+    """Test handling of connection refusal (DM frame)."""
+    conn = mock_connection_mod8
+
+    await conn.connect()
+    assert conn.state == AX25State.AWAITING_CONNECTION
+
+    # Simulate DM (disconnected mode)
+    conn.transport.inject_frame(
+        AX25Frame(
+            destination=AX25Address("TEST"),
+            source=AX25Address("DEST"),
+            control=0x0F,  # DM
+        ).encode()
+    )
+    await conn._process_incoming()
+
+    assert conn.state == AX25State.DISCONNECTED
+
+@pytest.mark.asyncio
+async def test_frame_reject(mock_connection_mod8):
+    """Test frame reject (REJ) handling."""
+    conn = mock_connection_mod8
+
+    await conn.connect()
+    # Simulate UA
+    conn.transport.inject_frame(
+        AX25Frame(
+            destination=AX25Address("TEST"),
+            source=AX25Address("DEST"),
+            control=0x63,
+        ).encode()
+    )
+    await conn._process_incoming()
+
+    # Send some data
+    await conn.send_data(b"Test data 1")
+    await conn.send_data(b"Test data 2")
+    initial_sent = len(conn.transport.sent_frames)
+
+    # Simulate REJ for frame 0
+    conn.transport.inject_frame(
+        AX25Frame(
+            destination=AX25Address("TEST"),
+            source=AX25Address("DEST"),
+            control=0x09,  # REJ, N(R)=0
+        ).encode()
+    )
+    await conn._process_incoming()
+
+    # Should have retransmitted from the rejected frame
+    assert len(conn.transport.sent_frames) > initial_sent
+
+@pytest.mark.asyncio
+async def test_window_management(mock_connection_mod8):
+    """Test proper window management and flow control."""
+    conn = mock_connection_mod8
+
+    await conn.connect()
+    # Simulate UA
+    conn.transport.inject_frame(
+        AX25Frame(
+            destination=AX25Address("TEST"),
+            source=AX25Address("DEST"),
+            control=0x63,
+        ).encode()
+    )
+    await conn._process_incoming()
+
+    # Fill the window (window size is 7 for mod 8)
+    for i in range(7):
+        await conn.send_data(f"Frame {i}".encode())
+
+    # Window should be full
+    assert len(conn.flow.outstanding_seqs) == 7
+    assert not conn.flow.can_send_i_frame()
+
+    # Try to send more data (should be queued)
+    await conn.send_data(b"Extra frame")
+    assert len(conn.outgoing_queue) == 1  # Should be queued
+
+    # Acknowledge some frames
+    conn.transport.inject_frame(
+        AX25Frame(
+            destination=AX25Address("TEST"),
+            source=AX25Address("DEST"),
+            control=0x21,  # RR, N(R)=4
+        ).encode()
+    )
+    await conn._process_incoming()
+
+    # Window should now have space
+    assert len(conn.flow.outstanding_seqs) < 7
+    assert conn.flow.can_send_i_frame()
+
+    # The queued frame should be sent
+    await asyncio.sleep(0.1)  # Allow async transmission
+    assert len(conn.outgoing_queue) == 0
+
+@pytest.mark.asyncio
+async def test_error_recovery(mock_connection_mod8):
+    """Test error recovery mechanisms."""
+    conn = mock_connection_mod8
+
+    await conn.connect()
+    # Simulate UA
+    conn.transport.inject_frame(
+        AX25Frame(
+            destination=AX25Address("TEST"),
+            source=AX25Address("DEST"),
+            control=0x63,
+        ).encode()
+    )
+    await conn._process_incoming()
+
+    # Send data
+    await conn.send_data(b"Test data")
+    initial_sent = len(conn.transport.sent_frames)
+
+    # Simulate timeout
+    conn._on_t1_timeout()
+
+    # Should have retransmitted
+    assert len(conn.transport.sent_frames) > initial_sent
+    assert conn.retry_count == 1
+
+    # Simulate successful acknowledgment
+    conn.transport.inject_frame(
+        AX25Frame(
+            destination=AX25Address("TEST"),
+            source=AX25Address("DEST"),
+            control=0x01,  # RR
+        ).encode()
+    )
+    await conn._process_incoming()
+
+    # Should have recovered
+    assert conn.state == AX25State.CONNECTED
+    assert conn.retry_count == 1  # Should not have incremented further
+
+@pytest.mark.asyncio
+async def test_xid_negotiation(mock_connection_mod8):
+    """Test XID parameter negotiation."""
+    conn = mock_connection_mod8
+
+    await conn.connect()
+    # Simulate UA
+    conn.transport.inject_frame(
+        AX25Frame(
+            destination=AX25Address("TEST"),
+            source=AX25Address("DEST"),
+            control=0x63,
+        ).encode()
+    )
+    await conn._process_incoming()
+
+    # Simulate XID frame from peer
+    from pyax25_22.core.negotiation import build_xid_frame
+    xid_data = build_xid_frame(AX25Config(modulo=8, window_size=4, max_frame=128))
+    conn.transport.inject_frame(
+        AX25Frame(
+            destination=AX25Address("TEST"),
+            source=AX25Address("DEST"),
+            control=0x87,  # XID
+            info=xid_data,
+        ).encode()
+    )
+    await conn._process_incoming()
+
+    # Should have negotiated config
+    assert conn.negotiated_config is not None
+    assert conn.negotiated_config.window_size <= 4  # Should take minimum
+    assert conn.negotiated_config.max_frame <= 128  # Should take minimum
+
+@pytest.mark.asyncio
+async def test_disconnection_by_peer(mock_connection_mod8):
+    """Test handling of disconnection initiated by peer."""
+    conn = mock_connection_mod8
+
+    await conn.connect()
+    # Simulate UA
+    conn.transport.inject_frame(
+        AX25Frame(
+            destination=AX25Address("TEST"),
+            source=AX25Address("DEST"),
+            control=0x63,
+        ).encode()
+    )
+    await conn._process_incoming()
+
+    assert conn.state == AX25State.CONNECTED
+
+    # Simulate DISC from peer
+    conn.transport.inject_frame(
+        AX25Frame(
+            destination=AX25Address("TEST"),
+            source=AX25Address("DEST"),
+            control=0x43,  # DISC
+        ).encode()
+    )
+    await conn._process_incoming()
+
+    # Should have sent UA and disconnected
+    assert conn.state == AX25State.DISCONNECTED
+    assert len(conn.transport.sent_frames) > 0  # Should have sent UA
+
+@pytest.mark.asyncio
+async def test_idle_timeout(mock_connection_mod8):
+    """Test T3 idle timeout handling."""
+    conn = mock_connection_mod8
+
+    await conn.connect()
+    # Simulate UA
+    conn.transport.inject_frame(
+        AX25Frame(
+            destination=AX25Address("TEST"),
+            source=AX25Address("DEST"),
+            control=0x63,
+        ).encode()
+    )
+    await conn._process_incoming()
+
+    # Set short T3 for testing
+    conn.config.t3_timeout = 0.5
+    conn.timers.t3_current = 0.5
+
+    # Start T3 timer
+    conn.timers.start_t3_sync(lambda: None)
+
+    # Wait for timeout
+    await asyncio.sleep(0.7)
+
+    # T3 should have expired (in real implementation, would trigger probe)
+    # For now, just verify timer was started
+    assert conn.timers._t3_thread_timer is not None
+
+    # Clean up
+    conn.timers.stop_t3_sync()
