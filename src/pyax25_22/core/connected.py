@@ -417,3 +417,4 @@ class AX25Connection:
         # The timers will call their callbacks automatically
         # This is just a placeholder for the test interface
         pass
+
