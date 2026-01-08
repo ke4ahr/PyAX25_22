@@ -154,7 +154,7 @@ class AX25Connection:
 
     async def _transmit_pending(self) -> None:
         """Transmit as many I-frames as window allows."""
-        while (len(self.flow.outstanding) < self.config.window_size
+        while (len(self.flow.outstanding_seqs) < self.config.window_size
                and self.outgoing_queue
                and not self.flow.local_busy):
 
@@ -165,7 +165,7 @@ class AX25Connection:
             self.v_s = (self.v_s + 1) % (128 if self.config.modulo == 128 else 8)
 
             # Start T1 if first outstanding frame
-            if len(self.flow.outstanding) == 1:
+            if len(self.flow.outstanding_seqs) == 1:
                 self.timers.start_t1_sync(self._on_t1_timeout)
 
     def _build_i_frame(self, info: bytes, p_bit: bool = False) -> AX25Frame:
@@ -223,7 +223,7 @@ class AX25Connection:
                 self.timers.stop_t1_sync()
                 logger.info("Connection established")
 
-        elif cmd == 0x6F:  # UA (modulo 128) - Added this case
+        elif cmd == 0x6F:  # UA (modulo 128)
             if self.sm.state == AX25State.AWAITING_CONNECTION:
                 self.sm.transition("UA_received")
                 self.timers.stop_t1_sync()
@@ -247,7 +247,7 @@ class AX25Connection:
         nr = (frame.control >> 5) & (0x07 if self.config.modulo == 8 else 0x7F)
         p_f = bool(frame.control & 0x10)
 
-        self.flow.receive_ack(nr)
+        self.flow.acknowledge_up_to(nr)
 
         if s_type == 0x00:  # RR
             self.flow.handle_rr()
@@ -275,7 +275,7 @@ class AX25Connection:
         self.incoming_buffer.append(frame.info)
 
         # Acknowledge
-        self.flow.receive_ack(nr)
+        self.flow.acknowledge_up_to(nr)
         self._send_rr(f_bit=p_bit)
 
     async def _send_frame(self, frame: AX25Frame) -> None:

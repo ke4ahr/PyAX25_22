@@ -29,7 +29,6 @@ from .exceptions import FrameError
 
 logger = logging.getLogger(__name__)
 
-
 class AX25FlowControl:
     """Comprehensive flow control manager for connected-mode AX.25."""
 
@@ -54,7 +53,7 @@ class AX25FlowControl:
     def can_send_i_frame(self) -> bool:
         return self.window_available > 0 and not self.peer_busy
 
-    def enqueue_i_frame(self, seq_num: int) -> None:
+    def send_data(self, seq_num: int) -> None:
         if not self.can_send_i_frame():
             raise FrameError("Cannot enqueue: window full or peer busy")
         self.outstanding_seqs.append(seq_num)

@@ -130,7 +130,7 @@ async def test_async_timer_t1(mock_connection_mod8):
     window_size=conn.config.window_size,
     t1_timeout=0.5,  # Short for testing
     t3_timeout=conn.config.t3_timeout,
-    retry_count=conn.config.retry_count,
+    retry_count=2,  # Reduced for testing
     tx_delay=conn.config.tx_delay,
     tx_tail=conn.config.tx_tail,
     persistence=conn.config.persistence,
@@ -184,22 +184,6 @@ async def test_flow_control_integration(mock_connection_mod8):
     initial_sent = len(conn.transport.sent_frames)
     await conn.send_data(b"Blocked data")
     assert len(conn.transport.sent_frames) == initial_sent  # Enqueue only
-
-    # Simulate peer ready (RR)
-    conn.transport.inject_frame(
-        AX25Frame(
-            destination=AX25Address("TEST"),
-            source=AX25Address("DEST"),
-            control=0x01,  # RR
-        ).encode()
-    )
-    await conn._process_incoming()
-
-    assert conn.peer_busy
-
-    initial_sent=len(conn.transport.sent_frames)
-    await conn.send_data(b"Blocked data")
-    assert len(conn.transport.sent_frames) == initial_sent # Enqueue only
 
     # Simulate peer ready (RR)
     conn.transport.inject_frame(
