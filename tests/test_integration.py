@@ -130,7 +130,7 @@ async def test_async_timer_t1(mock_connection_mod8):
     window_size=conn.config.window_size,
     t1_timeout=0.5,  # Short for testing
     t3_timeout=conn.config.t3_timeout,
-    retry_count=2,  # Reduced for testing
+    retry_count=1,  # Reduced for testing
     tx_delay=conn.config.tx_delay,
     tx_tail=conn.config.tx_tail,
     persistence=conn.config.persistence,

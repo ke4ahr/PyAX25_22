@@ -100,6 +100,11 @@ class AX25Connection:
             f"{remote_addr.callsign}-{remote_addr.ssid}, initiate={initiate}"
         )
 
+    @property
+    def peer_busy(self) -> bool:
+        """Get peer busy status from flow control."""
+        return self.flow.peer_busy
+
     async def connect(self) -> AX25Frame:
         """Initiate connection by sending SABM/SABME."""
         if self.sm.state != AX25State.AWAITING_CONNECTION:
@@ -222,12 +227,20 @@ class AX25Connection:
                 self.sm.transition("UA_received")
                 self.timers.stop_t1_sync()
                 logger.info("Connection established")
+            elif self.sm.state == AX25State.AWAITING_RELEASE:
+                self.sm.transition("UA_received")
+                self.timers.stop_t1_sync()
+                logger.info("Disconnection completed")
 
         elif cmd == 0x6F:  # UA (modulo 128)
             if self.sm.state == AX25State.AWAITING_CONNECTION:
                 self.sm.transition("UA_received")
                 self.timers.stop_t1_sync()
                 logger.info("Connection established (modulo 128)")
+            elif self.sm.state == AX25State.AWAITING_RELEASE:
+                self.sm.transition("UA_received")
+                self.timers.stop_t1_sync()
+                logger.info("Disconnection completed (modulo 128)")
 
         elif cmd == 0x43:  # DISC
             self.sm.transition("DISC_received")
@@ -365,4 +378,3 @@ class AX25Connection:
         # The timers will call their callbacks automatically
         # This is just a placeholder for the test interface
         pass
-
