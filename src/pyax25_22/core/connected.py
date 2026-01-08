@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import logging
 from typing import Optional, List
+import asyncio  # Added for async task creation
 
 from .framing import AX25Frame, AX25Address
 from .statemachine import AX25StateMachine, AX25State
@@ -221,6 +222,7 @@ class AX25Connection:
         self.timers.start_t3_sync(lambda: logger.warning("T3 idle timeout"))
 
     def _handle_u_frame(self, frame: AX25Frame) -> None:
+        """Handle unnumbered frame."""
         cmd = frame.control & ~0x10  # Remove P/F bit
         p_f = bool(frame.control & 0x10)
 
@@ -257,6 +259,7 @@ class AX25Connection:
                     self._send_xid_response()
 
     def _handle_s_frame(self, frame: AX25Frame) -> None:
+        """Handle supervisory frame."""
         s_type = (frame.control >> 2) & 0x03
         nr = (frame.control >> 5) & (0x07 if self.config.modulo == 8 else 0x7F)
         p_f = bool(frame.control & 0x10)
@@ -267,7 +270,8 @@ class AX25Connection:
             self.flow.handle_rr()
             # When peer becomes ready, try to transmit pending data
             if self.outgoing_queue:
-                await self._transmit_pending()
+                # Create an async task to transmit pending data
+                asyncio.create_task(self._transmit_pending())
         elif s_type == 0x01:  # RNR
             self.flow.handle_rnr()
         elif s_type == 0x02:  # REJ
@@ -279,6 +283,7 @@ class AX25Connection:
             self._send_rr(f_bit=True)
 
     def _handle_i_frame(self, frame: AX25Frame) -> None:
+        """Handle information frame."""
         ns = (frame.control >> 1) & (0x07 if self.config.modulo == 8 else 0x7F)
         nr = (frame.control >> 5) & (0x07 if self.config.modulo == 8 else 0x7F)
         p_bit = bool(frame.control & 0x10)
@@ -409,4 +414,3 @@ class AX25Connection:
         # The timers will call their callbacks automatically
         # This is just a placeholder for the test interface
         pass
-
