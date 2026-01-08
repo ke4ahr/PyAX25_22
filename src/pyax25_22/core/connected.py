@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import logging
 from typing import Optional, List
-import asyncio  # Added for async task creation
+import asyncio
 
 from .framing import AX25Frame, AX25Address
 from .statemachine import AX25StateMachine, AX25State
@@ -226,15 +226,18 @@ class AX25Connection:
         cmd = frame.control & ~0x10  # Remove P/F bit
         p_f = bool(frame.control & 0x10)
 
-        # Check if this is a SABM/SABME command
-        if cmd in (0x2F, 0x6F) and (frame.control & 0x03) == 0x03:
+        # Check the frame type first
+        frame_type = frame.control & 0x03
+
+        # SABM/SABME are commands (0x03) with specific command bytes
+        if frame_type == 0x03 and cmd in (0x2F, 0x6F):
             # This is SABM/SABME (U-frame with command)
             self.sm.transition("SABM_received" if cmd == 0x2F else "SABME_received")
             self.config = AX25Config(modulo=8 if cmd == 0x2F else 128)
             self._send_ua()
 
-        # Check if this is a UA response
-        elif cmd in (0x63, 0x6F) and (frame.control & 0x03) == 0x03:
+        # UA is also 0x03 but with different command bytes (0x63, 0x6F)
+        elif frame_type == 0x03 and cmd in (0x63, 0x6F):
             # This is UA (U-frame with response)
             if self.sm.state == AX25State.AWAITING_CONNECTION:
                 self.sm.transition("UA_received")
@@ -271,7 +274,10 @@ class AX25Connection:
             # When peer becomes ready, try to transmit pending data
             if self.outgoing_queue:
                 # Create an async task to transmit pending data
-                asyncio.create_task(self._transmit_pending())
+                loop = asyncio.get_event_loop()
+                loop.create_task(self._transmit_pending())
+                # Give the task a chance to run
+                loop.run_until_complete(asyncio.sleep(0))
         elif s_type == 0x01:  # RNR
             self.flow.handle_rnr()
         elif s_type == 0x02:  # REJ
