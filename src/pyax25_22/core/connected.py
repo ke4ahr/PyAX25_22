@@ -395,7 +395,7 @@ class AX25Connection:
         """Retransmit all outstanding frames."""
         logger.warning("Retransmitting all outstanding frames")
         # Implementation would resend from v_a
-        # For testing, we'll just send the SABM frame again if in AWAITING_CONNECTION
+        # For testing, we'll actually send the SABM frame again if in AWAITING_CONNECTION
         if self.sm.state == AX25State.AWAITING_CONNECTION:
             control = 0x2F if self.config.modulo == 8 else 0x6F  # SABM/SABME with P=1
             sabm_frame = AX25Frame(
