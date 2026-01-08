@@ -48,21 +48,23 @@ class AX25FlowControl:
 
     @property
     def window_available(self) -> int:
+        """Calculate available window space."""
         return self.config.window_size - len(self.outstanding_seqs)
 
     def can_send_i_frame(self) -> bool:
-        return self.window_available > 0 and not self.local_busy
+        """Check if we can send an I-frame."""
+        return self.window_available > 0 and not self.peer_busy and not self.local_busy
 
     def enqueue_i_frame(self, seq_num: int) -> None:
         """Enqueue an I-frame for transmission."""
         if not self.can_send_i_frame():
-            # For testing purposes, allow enqueueing even when peer is busy
-            # In real implementation, this would raise an error
-            if self.peer_busy:
-                logger.warning("Enqueueing I-frame despite peer being busy (test mode)")
-            self.outstanding_seqs.append(seq_num)
+            raise FrameError("Cannot enqueue: window full or peer busy")
+        if seq_num in self.outstanding_seqs:
+            raise FrameError(f"Sequence number {seq_num} already outstanding")
+        self.outstanding_seqs.append(seq_num)
 
     def acknowledge_up_to(self, nr: int) -> None:
+        """Acknowledge frames up to sequence number nr."""
         initial = len(self.outstanding_seqs)
         self.outstanding_seqs = [s for s in self.outstanding_seqs if s >= nr]
         if len(self.outstanding_seqs) < initial:
@@ -77,22 +79,27 @@ class AX25FlowControl:
         self.set_peer_busy()
 
     def set_peer_busy(self) -> None:
+        """Set peer busy state."""
         if not self.peer_busy:
             self.peer_busy = True
             logger.warning("Peer busy (RNR)")
 
     def clear_peer_busy(self) -> None:
+        """Clear peer busy state."""
         if self.peer_busy:
             self.peer_busy = False
             logger.info("Peer ready (RR)")
 
     def set_local_busy(self) -> None:
+        """Set local busy state."""
         self.local_busy = True
 
     def clear_local_busy(self) -> None:
+        """Clear local busy state."""
         self.local_busy = False
 
     def send_reject(self, nr: int) -> Optional[AX25Frame]:
+        """Send Reject frame."""
         if self.rej_sent:
             return None
         pf_bit = 0x10 if self.sm.state == AX25State.TIMER_RECOVERY else 0x00
@@ -106,6 +113,7 @@ class AX25FlowControl:
         )
 
     def send_selective_reject(self, nr: int) -> Optional[AX25Frame]:
+        """Send Selective Reject frame."""
         if self.srej_sent or nr in self.srej_requested:
             return None
         pf_bit = 0x10 if self.sm.state == AX25State.TIMER_RECOVERY else 0x00
@@ -120,6 +128,7 @@ class AX25FlowControl:
         )
 
     def send_rr(self, pf_bit: bool = False) -> AX25Frame:
+        """Send Receiver Ready frame."""
         control = 0x01 | (self.sm.v_r << 5) | (0x10 if pf_bit else 0x00)
         return AX25Frame(
             destination=getattr(self.sm, "remote_addr", None),
@@ -129,6 +138,7 @@ class AX25FlowControl:
         )
 
     def send_rnr(self, pf_bit: bool = False) -> AX25Frame:
+        """Send Receiver Not Ready frame."""
         control = 0x05 | (self.sm.v_r << 5) | (0x10 if pf_bit else 0x00)
         return AX25Frame(
             destination=getattr(self.sm, "remote_addr", None),
@@ -138,9 +148,9 @@ class AX25FlowControl:
         )
 
     def reset(self) -> None:
+        """Reset flow control state."""
         self.outstanding_seqs.clear()
         self.srej_requested.clear()
         self.local_busy = self.peer_busy = False
         self.rej_sent = self.srej_sent = False
         logger.info("Flow control reset")
-
