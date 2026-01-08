@@ -391,7 +391,7 @@ class AX25Connection:
 
         if self.sm.state == AX25State.AWAITING_CONNECTION:
             # Retransmit SABM/SABME when in connection establishment
-            self._retransmit_all()
+            self._retransmit_all_sync()
             self.retry_count += 1
             if self.retry_count >= self.config.retry_count:
                 self.sm.transition("T1_timeout")  # Final timeout leads to disconnect
@@ -410,7 +410,7 @@ class AX25Connection:
                 self.timers.start_t1_sync(self._on_t1_timeout)
 
     def _retransmit_all(self) -> None:
-        """Retransmit all outstanding frames."""
+        """Retransmit all outstanding frames (async version)."""
         logger.warning("Retransmitting all outstanding frames")
         # Implementation would resend from v_a
         # For testing, we'll actually send the SABM frame again if in AWAITING_CONNECTION
@@ -423,6 +423,27 @@ class AX25Connection:
                 config=self.config,
             )
             asyncio.create_task(self._send_frame(sabm_frame))
+
+    def _retransmit_all_sync(self) -> None:
+        """Retransmit all outstanding frames (sync version for timer callbacks)."""
+        logger.warning("Retransmitting all outstanding frames (sync)")
+        # Implementation would resend from v_a
+        # For testing, we'll actually send the SABM frame again if in AWAITING_CONNECTION
+        if self.sm.state == AX25State.AWAITING_CONNECTION:
+            control = 0x2F if self.config.modulo == 8 else 0x6F  # SABM/SABME with P=1
+            sabm_frame = AX25Frame(
+                destination=self.remote_addr,
+                source=self.local_addr,
+                control=control,
+                config=self.config,
+            )
+            # Use synchronous send for timer callbacks
+            if self.transport:
+                try:
+                    self.transport.send_frame(sabm_frame)
+                    logger.debug(f"Sent frame (sync): {sabm_frame.control:02X} to {sabm_frame.destination.callsign}")
+                except Exception as e:
+                    logger.error(f"Failed to send frame (sync): {e}")
 
     def _retransmit_from(self, nr: int) -> None:
         """Retransmit from N(R) after REJ."""
@@ -452,3 +473,4 @@ class AX25Connection:
         # The timers will call their callbacks automatically
         # This is just a placeholder for the test interface
         pass
+
