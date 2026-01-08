@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from enum import Enum
 import logging
+from typing import Optional
 
 from .config import AX25Config, DEFAULT_CONFIG_MOD8
 from .exceptions import ConnectionStateError
@@ -98,7 +99,7 @@ class AX25StateMachine:
         # AWAITING_CONNECTION transitions
         elif self.state == AX25State.AWAITING_CONNECTION:
             if event == "UA_received":
-                self.state = AX25State.CONNECTED  # Fixed: Changed from DISCONNECTED to CONNECTED
+                self.state = AX25State.CONNECTED
             elif event in ("DM_received", "FRMR_received"):
                 self.state = AX25State.DISCONNECTED
             elif event == "T1_timeout":
@@ -160,16 +161,3 @@ class AX25StateMachine:
             raise ConnectionStateError(f"Unknown state {self.state}")
 
         logger.debug(f"Transition: {old_state.value} -> {self.state.value}")
-
-# The key change made in this file is in the AWAITING_CONNECTION state transitions section:
-
-elif self.state == AX25State.AWAITING_CONNECTION:
-    if event == "UA_received":
-        self.state = AX25State.CONNECTED  # Fixed: Changed from DISCONNECTED to CONNECTED
-    elif event in ("DM_received", "FRMR_received"):
-        self.state = AX25State.DISCONNECTED
-    elif event == "T1_timeout":
-        self.state = AX25State.DISCONNECTED
-    else:
-        raise ConnectionStateError(f"Invalid event '{event}' in AWAITING_CONNECTION")
-
