@@ -1,3 +1,7 @@
+# -----
+# src/pyax25_22/core/connected.py
+# -----
+#
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2025-2026 Kris Kirby, KE4AHR
 
@@ -237,9 +241,11 @@ class AX25Connection:
         # SABM/SABME are commands (0x03) with specific command bytes
         if frame_type == 0x03 and cmd in (0x2F, 0x6F):
             # This is SABM/SABME (U-frame with command)
-            self.sm.transition("SABM_received" if cmd == 0x2F else "SABME_received")
-            self.config = AX25Config(modulo=8 if cmd == 0x2F else 128)
-            self._send_ua()
+            # Only process as incoming connection if we're not already trying to connect
+            if self.sm.state != AX25State.AWAITING_CONNECTION:
+                self.sm.transition("SABM_received" if cmd == 0x2F else "SABME_received")
+                self.config = AX25Config(modulo=8 if cmd == 0x2F else 128)
+                self._send_ua()
 
         # UA is also 0x03 but with different command bytes (0x63, 0x6F)
         elif frame_type == 0x03 and cmd in (0x63, 0x6F):
@@ -382,14 +388,26 @@ class AX25Connection:
     def _on_t1_timeout(self) -> None:
         """Handle T1 expiration."""
         logger.warning("T1 timeout - initiating recovery")
-        self.sm.transition("T1_timeout")
-        self._retransmit_all()
-        self.retry_count += 1
-        if self.retry_count >= self.config.retry_count:
-            self.sm.transition("T1_timeout")  # Final timeout leads to disconnect
+
+        if self.sm.state == AX25State.AWAITING_CONNECTION:
+            # Retransmit SABM/SABME when in connection establishment
+            self._retransmit_all()
+            self.retry_count += 1
+            if self.retry_count >= self.config.retry_count:
+                self.sm.transition("T1_timeout")  # Final timeout leads to disconnect
+            else:
+                # Restart T1 timer for next retry
+                self.timers.start_t1_sync(self._on_t1_timeout)
         else:
-            # Restart T1 timer for next retry
-            self.timers.start_t1_sync(self._on_t1_timeout)
+            # Handle timeout in other states
+            self.sm.transition("T1_timeout")
+            self._retransmit_all()
+            self.retry_count += 1
+            if self.retry_count >= self.config.retry_count:
+                self.sm.transition("T1_timeout")  # Final timeout leads to disconnect
+            else:
+                # Restart T1 timer for next retry
+                self.timers.start_t1_sync(self._on_t1_timeout)
 
     def _retransmit_all(self) -> None:
         """Retransmit all outstanding frames."""

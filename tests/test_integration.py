@@ -209,11 +209,12 @@ async def test_mod128_lifecycle(mock_connection_mod128):
 
     await conn.connect()
     # Simulate UA response (not SABME - that would be for incoming connection)
+    # Use the correct UA control byte for modulo 128
     conn.transport.inject_frame(
         AX25Frame(
             destination=AX25Address("TEST"),
             source=AX25Address("DEST"),
-            control=0x6F,  # UA (extended)
+            control=0x6F,  # UA (extended) - this is correct for modulo 128
         ).encode()
     )
     await conn._process_incoming()

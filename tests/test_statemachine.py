@@ -68,10 +68,10 @@ def test_disc_from_disconnected(sm_mod8):
 
 
 def test_ua_from_awaiting_connection(sm_mod8):
-    """UA in AWAITING_CONNECTION -> DISCONNECTED."""
+    """UA in AWAITING_CONNECTION -> CONNECTED (connection established)."""
     sm_mod8.transition("connect_request")
     sm_mod8.transition("UA_received")
-    assert sm_mod8.state == AX25State.DISCONNECTED
+    assert sm_mod8.state == AX25State.CONNECTED
 
 
 def test_timeout_from_awaiting_connection(sm_mod8):

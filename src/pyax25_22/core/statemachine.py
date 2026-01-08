@@ -1,3 +1,7 @@
+# -----
+# src/pyax25_22/core/statemachine.py
+# -----
+#
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2025-2026 Kris Kirby, KE4AHR
 
@@ -163,3 +167,4 @@ class AX25StateMachine:
             raise ConnectionStateError(f"Unknown state {self.state}")
 
         logger.debug(f"Transition: {old_state.value} -> {self.state.value}")
+
