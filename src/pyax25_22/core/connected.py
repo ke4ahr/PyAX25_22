@@ -273,11 +273,8 @@ class AX25Connection:
             self.flow.handle_rr()
             # When peer becomes ready, try to transmit pending data
             if self.outgoing_queue:
-                # Create an async task to transmit pending data
-                loop = asyncio.get_event_loop()
-                loop.create_task(self._transmit_pending())
-                # Give the task a chance to run
-                loop.run_until_complete(asyncio.sleep(0))
+                # Directly call the async method since we're in an async context
+                asyncio.create_task(self._transmit_pending())
         elif s_type == 0x01:  # RNR
             self.flow.handle_rnr()
         elif s_type == 0x02:  # REJ
