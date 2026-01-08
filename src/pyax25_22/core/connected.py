@@ -159,7 +159,9 @@ class AX25Connection:
             raise FrameError(f"Data exceeds N1={self.config.max_frame}")
 
         self.outgoing_queue.append(data)
-        await self._transmit_pending()
+        # Only transmit if peer is not busy
+        if not self.peer_busy:
+            await self._transmit_pending()
         logger.debug(f"Queued {len(data)} bytes for transmission")
 
     async def _transmit_pending(self) -> None:
@@ -222,30 +224,22 @@ class AX25Connection:
         cmd = frame.control & ~0x10  # Remove P/F bit
         p_f = bool(frame.control & 0x10)
 
-        if cmd in (0x2F, 0x6F):  # SABM/SABME
+        # SABM/SABME handling
+        if cmd in (0x2F, 0x6F):
             self.sm.transition("SABM_received" if cmd == 0x2F else "SABME_received")
             self.config = AX25Config(modulo=8 if cmd == 0x2F else 128)
             self._send_ua()
 
-        elif cmd == 0x63:  # UA (modulo 8)
+        # UA handling for both modulo 8 and 128
+        elif cmd in (0x63, 0x6F):  # UA in both formats
             if self.sm.state == AX25State.AWAITING_CONNECTION:
                 self.sm.transition("UA_received")
                 self.timers.stop_t1_sync()
-                logger.info("Connection established")
+                logger.info("Connection established" + (" (modulo 128)" if cmd == 0x6F else ""))
             elif self.sm.state == AX25State.AWAITING_RELEASE:
                 self.sm.transition("UA_received")
                 self.timers.stop_t1_sync()
-                logger.info("Disconnection completed")
-
-        elif cmd == 0x6F:  # UA (modulo 128)
-            if self.sm.state == AX25State.AWAITING_CONNECTION:
-                self.sm.transition("UA_received")
-                self.timers.stop_t1_sync()
-                logger.info("Connection established (modulo 128)")
-            elif self.sm.state == AX25State.AWAITING_RELEASE:
-                self.sm.transition("UA_received")
-                self.timers.stop_t1_sync()
-                logger.info("Disconnection completed (modulo 128)")
+                logger.info("Disconnection completed" + (" (modulo 128)" if cmd == 0x6F else ""))
 
         elif cmd == 0x43:  # DISC
             self.sm.transition("DISC_received")
