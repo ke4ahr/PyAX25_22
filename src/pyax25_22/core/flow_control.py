@@ -2,7 +2,7 @@
 # Copyright (C) 2025-2026 Kris Kirby, KE4AHR
 
 """
-pyax25_22/core/flow_control.py
+pyax25_22.core.flow_control.py
 
 AX.25 v2.2 compliant flow control and selective reject implementation.
 
@@ -64,6 +64,14 @@ class AX25FlowControl:
         self.outstanding_seqs = [s for s in self.outstanding_seqs if s >= nr]
         if len(self.outstanding_seqs) < initial:
             self.rej_sent = self.srej_sent = False
+
+    def handle_rr(self) -> None:
+        """Handle Receiver Ready frame."""
+        self.clear_peer_busy()
+
+    def handle_rnr(self) -> None:
+        """Handle Receiver Not Ready frame."""
+        self.set_peer_busy()
 
     def set_peer_busy(self) -> None:
         if not self.peer_busy:
