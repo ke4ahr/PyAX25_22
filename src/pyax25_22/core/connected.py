@@ -105,6 +105,11 @@ class AX25Connection:
         """Get peer busy status from flow control."""
         return self.flow.peer_busy
 
+    @property
+    def state(self):
+        """Get the current state from the state machine."""
+        return self.sm.state
+
     async def connect(self) -> AX25Frame:
         """Initiate connection by sending SABM/SABME."""
         if self.sm.state != AX25State.AWAITING_CONNECTION:
@@ -299,6 +304,7 @@ class AX25Connection:
             logger.debug(f"Would send: {frame.encode().hex()}")
 
     def _send_ua(self) -> None:
+        """Send Unnumbered Acknowledgement frame."""
         ua_frame = AX25Frame(
             destination=self.remote_addr,
             source=self.local_addr,
@@ -308,6 +314,7 @@ class AX25Connection:
         self._send_frame(ua_frame)
 
     def _send_rr(self, f_bit: bool = False) -> None:
+        """Send Receiver Ready frame."""
         control = 0x01 | (self.v_r << 5) | (0x10 if f_bit else 0x00)
         rr_frame = AX25Frame(
             destination=self.remote_addr,
@@ -317,7 +324,30 @@ class AX25Connection:
         )
         self._send_frame(rr_frame)
 
+    def _send_rnr(self, f_bit: bool = False) -> None:
+        """Send Receiver Not Ready frame."""
+        control = 0x05 | (self.v_r << 5) | (0x10 if f_bit else 0x00)
+        rnr_frame = AX25Frame(
+            destination=self.remote_addr,
+            source=self.local_addr,
+            control=control,
+            config=self.config,
+        )
+        self._send_frame(rnr_frame)
+
+    def _send_srej(self, nr: int) -> None:
+        """Send Selective Reject frame."""
+        control = 0x0D | (nr << 5) | 0x10  # SREJ with F=1
+        srej_frame = AX25Frame(
+            destination=self.remote_addr,
+            source=self.local_addr,
+            control=control,
+            config=self.config,
+        )
+        self._send_frame(srej_frame)
+
     def _send_xid_response(self) -> None:
+        """Send XID response frame."""
         xid_data = build_xid_frame(self.config)
         xid_frame = AX25Frame(
             destination=self.remote_addr,
@@ -355,23 +385,25 @@ class AX25Connection:
     def _retransmit_from(self, nr: int) -> None:
         """Retransmit from N(R) after REJ."""
         logger.warning(f"REJ received - retransmitting from {nr}")
+        # Implementation would resend frames from N(R)
+        # For now, just log the event
 
     def _retransmit_specific(self, nr: int) -> None:
         """Retransmit specific frame after SREJ."""
         logger.warning(f"SREJ received - retransmitting frame {nr}")
-
-    @property
-    def state(self):
-        """Get the current state from the state machine."""
-        return self.sm.state
+        # Implementation would resend specific frame
+        # For now, just log the event
 
     async def _process_incoming(self):
         """Process incoming frames from the transport."""
         if self.transport:
             frame_data = self.transport.receive_frame()
             if frame_data:
-                frame = AX25Frame.decode(frame_data, self.config)
-                self.process_frame(frame)
+                try:
+                    frame = AX25Frame.decode(frame_data, self.config)
+                    self.process_frame(frame)
+                except Exception as e:
+                    logger.error(f"Error decoding frame: {e}")
 
     async def _process_timers(self):
         """Process any pending timer events."""

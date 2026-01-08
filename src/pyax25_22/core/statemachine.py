@@ -21,7 +21,6 @@ from __future__ import annotations
 
 from enum import Enum
 import logging
-from typing import Optional
 
 from .config import AX25Config, DEFAULT_CONFIG_MOD8
 from .exceptions import ConnectionStateError
@@ -92,6 +91,9 @@ class AX25StateMachine:
                 self.peer_busy = self.reject_sent = self.srej_sent = False
             elif event == "DISC_received":
                 # Send DM response, remain disconnected
+                pass
+            elif event == "T1_timeout":
+                # Ignore T1 timeout in DISCONNECTED state
                 pass
             else:
                 raise ConnectionStateError(f"Invalid event '{event}' in DISCONNECTED")
