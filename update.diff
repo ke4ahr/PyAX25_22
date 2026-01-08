@@ -1,0 +1,91 @@
+--- a/src/pyax25_22/core/connected.py
++++ b/src/pyax25_22/core/connected.py
+@@ -154,7 +154,11 @@ class AX25Connection:
+         if len(data) > self.config.max_frame:
+             raise FrameError(f"Data exceeds N1={self.config.max_frame}")
+
+-        self.outgoing_queue.append(data)
++        self.outgoing_queue.append(data)
++        # Only transmit if peer is not busy
++        if not self.peer_busy:
++            await self._transmit_pending()
++        logger.debug(f"Queued {len(data)} bytes for transmission")
+
+     async def _transmit_pending(self) -> None:
+         """Transmit as many I-frames as window allows."""
+@@ -195,28 +199,34 @@ def process_frame(self, frame: AX25Frame) -> None:
+
+     def _handle_u_frame(self, frame: AX25Frame) -> None:
+         cmd = frame.control & ~0x10  # Remove P/F bit
+-        p_f = bool(frame.control & 0x10)
++        p_f = bool(frame.control & 0x10)
+
+-        if cmd in (0x2F, 0x6F):  # SABM/SABME
+-            self.sm.transition("SABM_received" if cmd == 0x2F else "SABME_received")
+-            self.config = AX25Config(modulo=8 if cmd == 0x2F else 128)
+-            self._send_ua()
++        # Check if this is a SABM/SABME command
++        if cmd in (0x2F, 0x6F) and (frame.control & 0x03) == 0x03:
++            # This is SABM/SABME (U-frame with command)
++            self.sm.transition("SABM_received" if cmd == 0x2F else "SABME_received")
++            self.config = AX25Config(modulo=8 if cmd == 0x2F else 128)
++            self._send_ua()
+
+-        elif cmd == 0x63:  # UA (modulo 8)
+-            if self.sm.state == AX25State.AWAITING_CONNECTION:
+-                self.sm.transition("UA_received")
+-                self.timers.stop_t1_sync()
+-                logger.info("Connection established")
+-            elif self.sm.state == AX25State.AWAITING_RELEASE:
+-                self.sm.transition("UA_received")
+-                self.timers.stop_t1_sync()
+-                logger.info("Disconnection completed")
++        # Check if this is a UA response
++        elif cmd in (0x63, 0x6F) and (frame.control & 0x03) == 0x03:
++            # This is UA (U-frame with response)
++            if self.sm.state == AX25State.AWAITING_CONNECTION:
++                self.sm.transition("UA_received")
++                self.timers.stop_t1_sync()
++                logger.info("Connection established" + (" (modulo 128)" if cmd == 0x6F else ""))
++            elif self.sm.state == AX25State.AWAITING_RELEASE:
++                self.sm.transition("UA_received")
++                self.timers.stop_t1_sync()
++                logger.info("Disconnection completed" + (" (modulo 128)" if cmd == 0x6F else ""))
+
+-        elif cmd == 0x6F:  # UA (modulo 128)
+-            if self.sm.state == AX25State.AWAITING_CONNECTION:
+-                self.sm.transition("UA_received")
+-                self.timers.stop_t1_sync()
+-                logger.info("Connection established (modulo 128)")
+-            elif self.sm.state == AX25State.AWAITING_RELEASE:
+-                self.sm.transition("UA_received")
+-                self.timers.stop_t1_sync()
+-                logger.info("Disconnection completed (modulo 128)")
++        elif cmd == 0x43:  # DISC
++            self.sm.transition("DISC_received")
++            self._send_ua()
++            logger.info("Connection disconnected by peer")
+
+         elif cmd == 0x87:  # XID
+             if frame.info:
+@@ -228,6 +238,10 @@ def _handle_s_frame(self, frame: AX25Frame) -> None:
+         s_type = (frame.control >> 2) & 0x03
+         nr = (frame.control >> 5) & (0x07 if self.config.modulo == 8 else 0x7F)
+         p_f = bool(frame.control & 0x10)
++
++        self.flow.acknowledge_up_to(nr)
++
++        if s_type == 0x00:  # RR
++            self.flow.handle_rr()
++            # When peer becomes ready, try to transmit pending data
++            if self.outgoing_queue:
++                await self._transmit_pending()
++        elif s_type == 0x01:  # RNR
++            self.flow.handle_rnr()
++        elif s_type == 0x02:  # REJ
++            self._retransmit_from(nr)
++        elif s_type == 0x03:  # SREJ
++            self._retransmit_specific(nr)
++
++        if p_f:
++            self._send_rr(f_bit=True)

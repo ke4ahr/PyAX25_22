@@ -224,14 +224,16 @@ class AX25Connection:
         cmd = frame.control & ~0x10  # Remove P/F bit
         p_f = bool(frame.control & 0x10)
 
-        # SABM/SABME handling
-        if cmd in (0x2F, 0x6F):
+        # Check if this is a SABM/SABME command
+        if cmd in (0x2F, 0x6F) and (frame.control & 0x03) == 0x03:
+            # This is SABM/SABME (U-frame with command)
             self.sm.transition("SABM_received" if cmd == 0x2F else "SABME_received")
             self.config = AX25Config(modulo=8 if cmd == 0x2F else 128)
             self._send_ua()
 
-        # UA handling for both modulo 8 and 128
-        elif cmd in (0x63, 0x6F):  # UA in both formats
+        # Check if this is a UA response
+        elif cmd in (0x63, 0x6F) and (frame.control & 0x03) == 0x03:
+            # This is UA (U-frame with response)
             if self.sm.state == AX25State.AWAITING_CONNECTION:
                 self.sm.transition("UA_received")
                 self.timers.stop_t1_sync()
@@ -263,6 +265,9 @@ class AX25Connection:
 
         if s_type == 0x00:  # RR
             self.flow.handle_rr()
+            # When peer becomes ready, try to transmit pending data
+            if self.outgoing_queue:
+                await self._transmit_pending()
         elif s_type == 0x01:  # RNR
             self.flow.handle_rnr()
         elif s_type == 0x02:  # REJ
@@ -404,3 +409,4 @@ class AX25Connection:
         # The timers will call their callbacks automatically
         # This is just a placeholder for the test interface
         pass
+
