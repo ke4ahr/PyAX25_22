@@ -242,8 +242,7 @@ class AX25Connection:
         if frame_type == 0x03 and cmd in (0x2F, 0x6F):
             # This is SABM/SABME (U-frame with command)
             # Only process as incoming connection if we're not already trying to connect
-            # AND if the P/F bit is set (indicating it's a command, not response)
-            if self.sm.state != AX25State.AWAITING_CONNECTION and p_f:
+            if self.sm.state != AX25State.AWAITING_CONNECTION:
                 self.sm.transition("SABM_received" if cmd == 0x2F else "SABME_received")
                 self.config = AX25Config(modulo=8 if cmd == 0x2F else 128)
                 self._send_ua()
@@ -251,15 +250,17 @@ class AX25Connection:
         # UA is also 0x03 but with different command bytes (0x63, 0x6F)
         elif frame_type == 0x03 and cmd in (0x63, 0x6F):
             # This is UA (U-frame with response)
-            # UA responses have F=1 (same as P=1 in the bit position)
+            # When we're in AWAITING_CONNECTION state, any UA frame is a response to our SABME
             if self.sm.state == AX25State.AWAITING_CONNECTION:
                 self.sm.transition("UA_received")
                 self.timers.stop_t1_sync()
                 logger.info("Connection established" + (" (modulo 128)" if cmd == 0x6F else ""))
+                return  # Don't process as other types
             elif self.sm.state == AX25State.AWAITING_RELEASE:
                 self.sm.transition("UA_received")
                 self.timers.stop_t1_sync()
                 logger.info("Disconnection completed" + (" (modulo 128)" if cmd == 0x6F else ""))
+                return  # Don't process as other types
 
         elif cmd == 0x43:  # DISC
             self.sm.transition("DISC_received")
@@ -475,4 +476,3 @@ class AX25Connection:
         # The timers will call their callbacks automatically
         # This is just a placeholder for the test interface
         pass
-
