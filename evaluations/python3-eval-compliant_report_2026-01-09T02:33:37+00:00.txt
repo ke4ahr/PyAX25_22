@@ -1,0 +1,45 @@
+============================================================
+PyAX25_22 AX.25 v2.2 Compliance Validation Report
+============================================================
+Date: January 02, 2026
+Version: 0.1.0
+Project: https://github.com/ke4ahr/PyAX25_22
+
+INFO: Running PyAX25_22 compliance test suite...
+............................................................             [100%]
+================================ tests coverage ================================
+_______________ coverage: platform linux, python 3.10.12-final-0 _______________
+
+Name                                                                                                Stmts   Miss  Cover   Missing
+---------------------------------------------------------------------------------------------------------------------------------
+/home/kbkirby/ve_test_install_venv/lib/python3.10/site-packages/pyax25_22/__init__.py                  10      4    60%   66-69
+/home/kbkirby/ve_test_install_venv/lib/python3.10/site-packages/pyax25_22/core/__init__.py             16      3    81%   110-112
+/home/kbkirby/ve_test_install_venv/lib/python3.10/site-packages/pyax25_22/core/config.py               42      9    79%   70, 74, 78, 84, 90, 94, 100, 106, 110
+/home/kbkirby/ve_test_install_venv/lib/python3.10/site-packages/pyax25_22/core/connected.py           230     52    77%   121, 141, 161, 164, 168-169, 199, 227-228, 259-262, 273-276, 302, 306-320, 328-332, 347-354, 358-365, 369-376, 380-388, 409, 420-427, 447-448, 470-471
+/home/kbkirby/ve_test_install_venv/lib/python3.10/site-packages/pyax25_22/core/exceptions.py           42      1    98%   48
+/home/kbkirby/ve_test_install_venv/lib/python3.10/site-packages/pyax25_22/core/flow_control.py         78      1    99%   63
+/home/kbkirby/ve_test_install_venv/lib/python3.10/site-packages/pyax25_22/core/framing.py             169      3    98%   172, 209, 221
+/home/kbkirby/ve_test_install_venv/lib/python3.10/site-packages/pyax25_22/core/negotiation.py          68     26    62%   110, 116, 118, 122-129, 154-195
+/home/kbkirby/ve_test_install_venv/lib/python3.10/site-packages/pyax25_22/core/statemachine.py        104     13    88%   58, 63, 81-82, 101, 110, 114, 124, 137, 146, 155, 164-167
+/home/kbkirby/ve_test_install_venv/lib/python3.10/site-packages/pyax25_22/core/timers.py              171    102    40%   84-86, 95-96, 111-113, 122-123, 134-140, 144-154, 163-169, 173-183, 193-195, 201-205, 210-219, 223-230, 240-252, 256-277, 286-291, 300-304, 313
+/home/kbkirby/ve_test_install_venv/lib/python3.10/site-packages/pyax25_22/core/validation.py           33     23    30%   52-85, 101-102
+/home/kbkirby/ve_test_install_venv/lib/python3.10/site-packages/pyax25_22/interfaces/__init__.py       13      6    54%   37-42
+/home/kbkirby/ve_test_install_venv/lib/python3.10/site-packages/pyax25_22/interfaces/agwpe.py         154    100    35%   109-117, 123-133, 139-152, 160-161, 167-168, 174-175, 185-186, 192-193, 199-200, 206-207, 217-218, 231-251, 255-293, 297-303, 318-321
+/home/kbkirby/ve_test_install_venv/lib/python3.10/site-packages/pyax25_22/interfaces/kiss.py          127     85    33%   99-114, 120-129, 139-162, 172, 182-183, 187-233, 245-248
+/home/kbkirby/ve_test_install_venv/lib/python3.10/site-packages/pyax25_22/interfaces/transport.py      41     21    49%   42-43, 53, 63, 77, 93, 103-104, 114-119, 133-143
+---------------------------------------------------------------------------------------------------------------------------------
+TOTAL                                                                                                1298    449    65%
+60 passed in 2.49s
+T1 timeout after 0.50s
+T1 timeout - initiating recovery
+Retransmitting all outstanding frames (sync)
+
+
+Test coverage: 65.0%
+WARNING: Coverage below minimum 95.0%
+
+============================================================
+COMPLIANCE FAILURE
+One or more tests failed or coverage insufficient.
+============================================================
+

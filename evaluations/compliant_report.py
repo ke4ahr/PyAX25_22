@@ -23,6 +23,7 @@ import sys
 import subprocess
 import logging
 from pathlib import Path
+from typing import Optional
 
 # Configure minimal logging
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -31,7 +32,6 @@ logger = logging.getLogger(__name__)
 # Test and coverage configuration
 TEST_ARGS = ["-q", "--cov=pyax25_22", "--cov-report=term-missing"]
 MIN_COVERAGE = 95.0  # Minimum acceptable coverage percentage
-
 
 def run_tests() -> tuple[bool, str]:
     """
@@ -52,7 +52,6 @@ def run_tests() -> tuple[bool, str]:
     except FileNotFoundError:
         return (False, "pytest not found - install with 'pip install pytest pytest-cov'")
 
-
 def extract_coverage(output: str) -> Optional[float]:
     """
     Extract coverage percentage from pytest-cov output.
@@ -72,7 +71,6 @@ def extract_coverage(output: str) -> Optional[float]:
                 except ValueError:
                     pass
     return None
-
 
 def main() -> int:
     """Main compliance report execution."""
@@ -110,7 +108,6 @@ def main() -> int:
         print("One or more tests failed or coverage insufficient.")
         print("=" * 60)
         return 1
-
 
 if __name__ == "__main__":
     sys.exit(main())
