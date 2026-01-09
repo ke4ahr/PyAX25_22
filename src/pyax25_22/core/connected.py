@@ -238,29 +238,28 @@ class AX25Connection:
         # Check the frame type first
         frame_type = frame.control & 0x03
 
+        # First check if this is a UA response when we're expecting one
+        if frame_type == 0x03 and cmd in (0x63, 0x6F):
+            # This could be UA (U-frame with response)
+            if self.sm.state == AX25State.AWAITING_CONNECTION:
+                # When we're in AWAITING_CONNECTION, any U-frame with these cmd values is UA response
+                self.sm.transition("UA_received")
+                self.timers.stop_t1_sync()
+                logger.info("Connection established" + (" (modulo 128)" if cmd == 0x6F else ""))
+                return
+            elif self.sm.state == AX25State.AWAITING_RELEASE:
+                self.sm.transition("UA_received")
+                self.timers.stop_t1_sync()
+                logger.info("Disconnection completed" + (" (modulo 128)" if cmd == 0x6F else ""))
+                return
+
         # SABM/SABME are commands (0x03) with specific command bytes
         if frame_type == 0x03 and cmd in (0x2F, 0x6F):
-            # This is SABM/SABME (U-frame with command)
             # Only process as incoming connection if we're not already trying to connect
             if self.sm.state != AX25State.AWAITING_CONNECTION:
                 self.sm.transition("SABM_received" if cmd == 0x2F else "SABME_received")
                 self.config = AX25Config(modulo=8 if cmd == 0x2F else 128)
                 self._send_ua()
-
-        # UA is also 0x03 but with different command bytes (0x63, 0x6F)
-        elif frame_type == 0x03 and cmd in (0x63, 0x6F):
-            # This is UA (U-frame with response)
-            # When we're in AWAITING_CONNECTION state, any UA frame is a response to our SABME
-            if self.sm.state == AX25State.AWAITING_CONNECTION:
-                self.sm.transition("UA_received")
-                self.timers.stop_t1_sync()
-                logger.info("Connection established" + (" (modulo 128)" if cmd == 0x6F else ""))
-                return  # Don't process as other types
-            elif self.sm.state == AX25State.AWAITING_RELEASE:
-                self.sm.transition("UA_received")
-                self.timers.stop_t1_sync()
-                logger.info("Disconnection completed" + (" (modulo 128)" if cmd == 0x6F else ""))
-                return  # Don't process as other types
 
         elif cmd == 0x43:  # DISC
             self.sm.transition("DISC_received")
