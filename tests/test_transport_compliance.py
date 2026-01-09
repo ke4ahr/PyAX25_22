@@ -56,12 +56,12 @@ def test_kiss_multi_drop_command_byte():
     # Test command byte construction directly
     assert (1 << 4) | 0x00 == 0x10  # Port 1, DATA
     assert (0 << 4) | 0x0C == 0x0C  # Port 0, DATA_EXT
-    assert (15 << 4) | 0x0E == 0xEF  # Port 15, POLL
+    assert (15 << 4) | 0x00 == 0xF0  # Port 15, DATA
 
 def test_agwpe_header_format():
     """Test AGWPE header structure and fields."""
     # Test header format directly
-    header = struct.pack(HEADER_FMT, 0, ord('K'), b'DEST     ', b'SRC      ', 5, 0)
+    header = struct.pack(HEADER_FMT, 0, ord('K'), b'DEST\x00\x00\x00\x00\x00', b'SRC\x00\x00\x00\x00\x00', 5, 0)
     assert len(header) == HEADER_SIZE
     assert header[4] == ord('K')  # Data kind
 
@@ -69,8 +69,8 @@ def test_agwpe_header_format():
     port, data_kind_int, call_from_b, call_to_b, data_len, user = struct.unpack(HEADER_FMT, header)
     assert port == 0
     assert chr(data_kind_int) == 'K'
-    assert call_from_b.decode('ascii').rstrip() == 'DEST'
-    assert call_to_b.decode('ascii').rstrip() == 'SRC'
+    assert call_from_b.decode('ascii').rstrip('\x00') == 'DEST'
+    assert call_to_b.decode('ascii').rstrip('\x00') == 'SRC'
     assert data_len == 5
 
 def test_transport_validation_kiss():
@@ -102,15 +102,15 @@ def test_transport_validation_kiss():
 def test_transport_validation_agwpe():
     """Test AGWPE transport round-trip validation."""
     # Test header format
-    header = struct.pack(HEADER_FMT, 0, ord('K'), b'DEST     ', b'SRC      ', 5, 0)
+    header = struct.pack(HEADER_FMT, 0, ord('K'), b'DEST\x00\x00\x00\x00\x00', b'SRC\x00\x00\x00\x00\x00', 5, 0)
     assert len(header) == HEADER_SIZE
 
     # Test data extraction
     port, data_kind_int, call_from_b, call_to_b, data_len, user = struct.unpack(HEADER_FMT, header)
     assert port == 0
     assert chr(data_kind_int) == 'K'
-    assert call_from_b.decode('ascii').rstrip() == 'DEST'
-    assert call_to_b.decode('ascii').rstrip() == 'SRC'
+    assert call_from_b.decode('ascii').rstrip('\x00') == 'DEST'
+    assert call_to_b.decode('ascii').rstrip('\x00') == 'SRC'
     assert data_len == 5
 
 def test_kiss_send_receive_mock():
@@ -144,4 +144,3 @@ def test_kiss_send_receive_mock():
     # For testing, we just verify the structure
     assert serial.in_buffer[0] == FEND
     assert serial.in_buffer[-1] == FEND
-
