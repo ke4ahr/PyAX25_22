@@ -1,0 +1,574 @@
+.\" SPDX-License-Identifier: LGPL-3.0-or-later
+.\" Copyright (C) 2026 Kris Kirby, KE4AHR
+.\"
+.TH PYAX25_22 3 "2026-03-21" "PyAX25_22 0.6.5" "PyAX25_22 Library Reference"
+.SH NAME
+pyax25_22 \-- Pure Python AX.25 v2.2 Layer 2 implementation for amateur packet radio
+.SH SYNOPSIS
+.B from pyax25_22.core.framing import AX25Frame, AX25Address
+.br
+.B from pyax25_22.core.connected import AX25Connection
+.br
+.B from pyax25_22.core.config import AX25Config
+.br
+.B from pyax25_22.interfaces.kiss import KISSInterface
+.br
+.B from pyax25_22.interfaces.agwpe import AGWPEInterface
+.SH DESCRIPTION
+.B PyAX25_22
+is a complete, pure-Python implementation of the AX.25 Version 2.2
+(July 1998) Link Layer protocol for amateur packet radio. It provides
+a clean, well-tested, production-ready foundation for building packet
+radio applications in Python.
+.PP
+The library implements all AX.25 Layer 2 features including:
+.IP \(bu 4
+All frame types: I (Information), S (Supervisory: RR/RNR/REJ/SREJ),
+and U (Unnumbered: SABM/SABME/UA/DISC/DM/FRMR/UI/XID/TEST)
+.IP \(bu 4
+Modulo 8 and Modulo 128 operation
+.IP \(bu 4
+Up to 8 digipeaters with H-bit (has-been-repeated) handling
+.IP \(bu 4
+Bit stuffing/destuffing and CRC-16/CCITT-FALSE FCS calculation
+.IP \(bu 4
+XID parameter negotiation (modulo, window size, max frame N1, SREJ)
+.IP \(bu 4
+Complete connected-mode state machine per AX.25 v2.2 SDL diagrams
+.IP \(bu 4
+Adaptive T1 timer using SRTT (Smoothed Round-Trip Time) algorithm
+.IP \(bu 4
+KISS serial interface with G8BPQ multi-drop extension support
+.IP \(bu 4
+AGWPE (AGW Packet Engine) TCP/IP interface
+.IP \(bu 4
+Synchronous and asynchronous operation
+.SH MODULES
+.SS pyax25_22.core.framing
+.PP
+Frame encoding and decoding.
+.TP
+.B AX25Address(callsign, ssid=0, c_bit=False, h_bit=False)
+Represents one AX.25 address field entry. The callsign is 1\-6 uppercase
+letters. The SSID is 0\-15. The c_bit is the Command/Response bit. The
+h_bit is the Has-Been-Repeated bit (used in digipeater fields).
+.TP
+.B AX25Frame(destination, source, digipeaters=[], control=0, pid=None, info=b"", config=DEFAULT_CONFIG_MOD8)
+Represents a complete AX.25 frame. Call
+.B encode()
+to get the raw bytes (with flags and FCS). Call
+.B AX25Frame.decode(raw_bytes)
+to parse a raw frame.
+.TP
+.B fcs_calc(data)
+Calculate the CRC-16/CCITT-FALSE FCS over a block of bytes. Returns a
+16-bit integer.
+.TP
+.B verify_fcs(data, received_fcs)
+Verify a received FCS value against computed FCS. Returns True if valid.
+.SS pyax25_22.core.config
+.PP
+Protocol configuration with validated parameters.
+.TP
+.B AX25Config(modulo=8, max_frame=256, window_size=7, t1_timeout=10.0, t3_timeout=300.0, retry_count=10, tx_delay=0.3, tx_tail=0.05, persistence=63, slot_time=0.1)
+Immutable (frozen) configuration object. All parameters are validated on
+creation. Raises ConfigurationError for out-of-range values.
+.RS 4
+.TP
+.B modulo
+Sequence number modulo: 8 (normal) or 128 (extended).
+.TP
+.B max_frame
+Maximum I-frame information field size in bytes (N1). Range: 1\-4096.
+.TP
+.B window_size
+Maximum outstanding I-frames (k). Range: 1\-7 (mod 8) or 1\-127 (mod 128).
+.TP
+.B t1_timeout
+Acknowledgment timer T1 in seconds. Range: 0.0\-300.0.
+.TP
+.B t3_timeout
+Idle channel probe timer T3 in seconds. Range: 10.0\-3600.0.
+.TP
+.B retry_count
+Maximum retransmission attempts (N2). Range: 0\-255.
+.RE
+.PP
+Pre-defined configuration objects:
+.RS 4
+.TP
+.B DEFAULT_CONFIG_MOD8
+Standard modulo-8 operation, 7-frame window, 10-second T1.
+.TP
+.B DEFAULT_CONFIG_MOD128
+Extended modulo-128 operation, 63-frame window, 15-second T1.
+.TP
+.B CONFIG_APRS
+Optimized for APRS monitoring (4-frame window, 5-second T1).
+.RE
+.SS pyax25_22.core.statemachine
+.PP
+AX.25 connected-mode state machine per SDL diagrams.
+.TP
+.B AX25State
+Enum with states: DISCONNECTED, AWAITING_CONNECTION, AWAITING_RELEASE,
+CONNECTED, TIMER_RECOVERY, AWAITING_XID.
+.TP
+.B AX25StateMachine(config, layer3_initiated=True)
+Implements state transitions. Call
+.B transition(event)
+to drive state changes. Valid events include: connect_request,
+SABM_received, SABME_received, UA_received, DM_received, FRMR_received,
+DISC_received, disconnect_request, T1_timeout, T3_timeout, ack_received,
+RR_received, RNR_received, REJ_received, SREJ_received, XID_received.
+.SS pyax25_22.core.connected
+.PP
+Connected-mode AX.25 session management.
+.TP
+.B AX25Connection(local_addr, remote_addr, config=None, initiate=False, transport=None)
+Manages a single connected AX.25 link. Integrates state machine, flow
+control, and timers.
+.RS 4
+.TP
+.B connect()
+Initiate connection: sends SABM/SABME and waits for UA.
+.TP
+.B disconnect()
+Initiate disconnection: sends DISC and waits for UA.
+.TP
+.B send_data(data)
+Queue I-frame data for transmission.
+.TP
+.B receive_data()
+Return next received I-frame payload.
+.TP
+.B process_frame(frame)
+Process an incoming AX.25 frame (drives state machine).
+.RE
+.SS pyax25_22.core.flow_control
+.PP
+Sliding window flow control manager.
+.TP
+.B AX25FlowControl(state_machine, config)
+Manages V(S), V(R), V(A) sequence variables and supervisory frame
+generation.
+.RS 4
+.TP
+.B can_send_i_frame()
+Returns True if the transmit window has space.
+.TP
+.B enqueue_i_frame(seq_num)
+Record an outstanding I-frame sequence number.
+.TP
+.B acknowledge_up_to(nr)
+Acknowledge all frames up to and including N(R)-1.
+.TP
+.B window_available
+Property: number of I-frame slots remaining in the window.
+.RE
+.SS pyax25_22.core.timers
+.PP
+AX.25 timer management with adaptive T1.
+.TP
+.B AX25Timers(config, on_t1_expire=None, on_t3_expire=None)
+Manages T1 (acknowledgment) and T3 (idle probe) timers. T1 adapts
+using the SRTT (Smoothed Round-Trip Time) Jacobson/Karels algorithm.
+.RS 4
+.TP
+.B start_t1_sync()
+Start T1 timer (synchronous/threaded mode).
+.TP
+.B stop_t1_sync()
+Stop T1 timer.
+.TP
+.B start_t3_sync()
+Start T3 idle probe timer.
+.TP
+.B update_srtt(rtt)
+Update the smoothed RTT estimate with a new round-trip time sample.
+.RE
+.SS pyax25_22.core.negotiation
+.PP
+XID parameter negotiation.
+.TP
+.B build_xid_frame(config)
+Build the XID information field bytes (TLV format) for the given config.
+.TP
+.B parse_xid_frame(info)
+Parse XID information field bytes. Returns a dict of parameter ID -> value.
+.TP
+.B negotiate_config(local_config, remote_params)
+Negotiate a final configuration by taking the minimum of offered values.
+Returns an AX25Config.
+.SS pyax25_22.core.exceptions
+.PP
+Exception hierarchy (all inherit from
+.B AX25Error
+):
+.RS 4
+.TP
+.B AX25Error
+Base exception for all library errors.
+.TP
+.B FrameError
+Frame parsing or encoding failure.
+.TP
+.B InvalidAddressError
+Malformed callsign or SSID.
+.TP
+.B FCSError
+CRC verification failure.
+.TP
+.B BitStuffingError
+Bit stuffing/destuffing violation.
+.TP
+.B ConnectionStateError
+Operation in invalid state.
+.TP
+.B TimeoutError
+Timer expiration.
+.TP
+.B ProtocolViolationError
+AX.25 protocol violation (e.g., FRMR condition).
+.TP
+.B NegotiationError
+XID parameter negotiation failure.
+.TP
+.B KISSError
+KISS protocol or serial I/O error.
+.TP
+.B AGWPEError
+AGWPE TCP/IP connection or protocol error.
+.TP
+.B ConfigurationError
+Invalid configuration parameters.
+.RE
+.SS pyax25_22.interfaces.transport
+.PP
+Abstract base class for all transport interfaces.
+.TP
+.B TransportInterface
+Abstract class with methods: connect(), disconnect(), send_frame(frame),
+receive(timeout=None), register_callback(event, callback).
+All transport implementations inherit from this class.
+.SS pyax25_22.interfaces.kiss
+.PP
+KISS serial interface with G8BPQ multi-drop support.
+.TP
+.B KISSInterface(port, baudrate=9600, tnc_address=0, timeout=1.0)
+Connects to a TNC via serial KISS protocol. Supports multi-drop
+addressing (G8BPQ extension) where the TNC address is encoded in the
+high nibble (bits 4\-7) of the command byte.
+.RS 4
+.TP
+.B connect()
+Open the serial port and start the background reader thread.
+.TP
+.B disconnect()
+Stop the reader thread and close the serial port.
+.TP
+.B send_frame(frame, cmd=CMD_DATA)
+Encode an AX25Frame as a KISS frame and write it to the serial port.
+.TP
+.B receive(timeout=None)
+Block until a frame is available. Returns (tnc_addr, port, AX25Frame).
+Raises KISSError on timeout.
+.TP
+.B register_callback(cmd, callback)
+Register a function to call when a specific KISS command is received.
+The callback signature is: callback(tnc_addr, port, frame).
+.RE
+.PP
+KISS Constants:
+.RS 4
+.TP
+.B FEND = 0xC0
+Frame end delimiter.
+.TP
+.B FESC = 0xDB
+Frame escape character.
+.TP
+.B TFEND = 0xDC
+Escaped FEND within data.
+.TP
+.B TFESC = 0xDD
+Escaped FESC within data.
+.TP
+.B CMD_DATA = 0x00
+Send/receive data frame.
+.TP
+.B CMD_TXDELAY = 0x01
+Set transmitter keyup delay.
+.TP
+.B CMD_PERSISTENCE = 0x02
+Set P-persistence value.
+.TP
+.B CMD_SLOTTIME = 0x03
+Set slot time.
+.TP
+.B CMD_TXTAIL = 0x04
+Set transmitter tail delay.
+.TP
+.B CMD_FULLDUPLEX = 0x05
+Enable or disable full duplex.
+.TP
+.B CMD_POLL = 0x0E
+Poll command (G8BPQ multi-drop).
+.TP
+.B CMD_EXIT_KISS = 0xFF
+Exit KISS mode.
+.RE
+.SS pyax25_22.interfaces.agwpe
+.PP
+AGWPE (AGW Packet Engine) TCP/IP API client.
+.TP
+.B AGWPEInterface(host='127.0.0.1', port=8000, timeout=5.0)
+Connects to an AGWPE server over TCP. The default port is 8000.
+.RS 4
+.TP
+.B connect()
+Open TCP connection and start background reader thread.
+.TP
+.B disconnect()
+Stop reader thread and close the TCP socket.
+.TP
+.B register_callsign(callsign)
+Register a callsign with the AGWPE server ('X' command).
+.TP
+.B enable_monitoring()
+Enable monitoring of all received frames ('m' command).
+.TP
+.B disable_monitoring()
+Disable frame monitoring ('m' command toggle).
+.TP
+.B query_version()
+Request AGWPE server version information ('R' command).
+.TP
+.B query_port_capabilities(port=0)
+Request radio port capabilities ('g' command).
+.TP
+.B query_outstanding_frames(port=0, callsign='')
+Query count of outstanding (queued) frames ('y' command).
+.TP
+.B enable_raw_frames()
+Enable reception of raw AX.25 frames ('k' command).
+.TP
+.B send_frame(port, data_kind, call_from, call_to, data=b'')
+Send a raw AGWPE frame with the given header fields.
+.TP
+.B receive(timeout=None)
+Return next received frame as (port, data_kind, call_from, call_to, data).
+Raises AGWPEError on timeout.
+.TP
+.B register_callback(data_kind, callback)
+Register a function to call when a specific DataKind is received.
+Callback signature: callback(port, call_from, call_to, data).
+.RE
+.PP
+AGWPE DataKind values:
+.RS 4
+.TP
+.B 'X'
+Callsign registration reply.
+.TP
+.B 'G'
+Port capabilities information.
+.TP
+.B 'R'
+Version information.
+.TP
+.B 'm'
+Monitored frame data.
+.TP
+.B 'k'
+Raw AX.25 frame.
+.TP
+.B 'U'
+Unproto (UI frame) monitor data.
+.TP
+.B 'D'
+Data from connected station.
+.TP
+.B 'd'
+Disconnect notification.
+.TP
+.B 'c'
+New connection established.
+.TP
+.B 'H'
+Heard stations list.
+.TP
+.B 'Y'
+Outstanding frames count.
+.RE
+.SS pyax25_22.utils.logging
+.PP
+Structured logging configuration.
+.TP
+.B get_logger(name)
+Return a configured logger for the given module name. Uses the
+PYAX25_LOG_LEVEL environment variable to set the log level (default INFO).
+Set PYAX25_LOG_FILE to write logs to a file instead of stderr.
+.TP
+.B enable_debug_logging()
+Enable DEBUG-level logging for all pyax25_22 modules.
+.SH ENVIRONMENT
+.TP
+.B PYAX25_LOG_LEVEL
+Set the logging level. Values: DEBUG, INFO, WARNING, ERROR, CRITICAL.
+Default is INFO.
+.TP
+.B PYAX25_LOG_FILE
+Path to a log file. If not set, logs go to stderr.
+.SH EXAMPLES
+.SS Create and encode an AX.25 UI frame
+.PP
+.nf
+from pyax25_22.core.framing import AX25Frame, AX25Address
+
+dest = AX25Address("APRS", ssid=0)
+src  = AX25Address("KE4AHR", ssid=1)
+frame = AX25Frame(
+    destination=dest,
+    source=src,
+    control=0x03,   # UI frame
+    pid=0xF0,       # No-layer-3
+    info=b">Hello from PyAX25_22!",
+)
+raw = frame.encode()
+print(raw.hex())
+.fi
+.SS Connect to a TNC via KISS and monitor frames
+.PP
+.nf
+from pyax25_22.interfaces.kiss import KISSInterface
+
+kiss = KISSInterface("/dev/ttyUSB0", baudrate=9600)
+kiss.connect()
+
+while True:
+    tnc_addr, port, frame = kiss.receive(timeout=30.0)
+    print(f"{frame.source.callsign} > {frame.destination.callsign}")
+.fi
+.SS Connect to AGWPE and enable monitoring
+.PP
+.nf
+from pyax25_22.interfaces.agwpe import AGWPEInterface
+
+agwpe = AGWPEInterface(host="127.0.0.1", port=8000)
+agwpe.connect()
+agwpe.register_callsign("KE4AHR")
+agwpe.enable_monitoring()
+
+while True:
+    port, kind, frm, to, data = agwpe.receive(timeout=30.0)
+    print(f"{frm} > {to}: {data}")
+.fi
+.SS Establish a connected AX.25 session
+.PP
+.nf
+from pyax25_22.core.framing import AX25Address
+from pyax25_22.core.connected import AX25Connection
+from pyax25_22.core.config import DEFAULT_CONFIG_MOD8
+
+local  = AX25Address("KE4AHR", ssid=1)
+remote = AX25Address("W1AW",   ssid=0)
+
+conn = AX25Connection(local, remote, config=DEFAULT_CONFIG_MOD8,
+                      initiate=True)
+conn.connect()
+conn.send_data(b"Hello via AX.25 connected mode!")
+data = conn.receive_data()
+conn.disconnect()
+.fi
+.SH FILES
+.TP
+.I src/pyax25_22/core/framing.py
+AX.25 frame encoding, decoding, bit stuffing, FCS.
+.TP
+.I src/pyax25_22/core/statemachine.py
+AX.25 state machine (6 states per SDL diagrams).
+.TP
+.I src/pyax25_22/core/connected.py
+Connected-mode session (AX25Connection class).
+.TP
+.I src/pyax25_22/core/flow_control.py
+Sliding window flow control (RR/RNR/REJ/SREJ).
+.TP
+.I src/pyax25_22/core/timers.py
+T1 adaptive timer (SRTT) and T3 idle probe timer.
+.TP
+.I src/pyax25_22/core/negotiation.py
+XID parameter negotiation (TLV encoding/decoding).
+.TP
+.I src/pyax25_22/core/config.py
+Protocol configuration (AX25Config dataclass).
+.TP
+.I src/pyax25_22/core/exceptions.py
+Complete exception hierarchy.
+.TP
+.I src/pyax25_22/interfaces/kiss.py
+KISS serial interface with multi-drop support.
+.TP
+.I src/pyax25_22/interfaces/agwpe.py
+AGWPE TCP/IP client interface.
+.TP
+.I src/pyax25_22/interfaces/transport.py
+Abstract transport base class.
+.TP
+.I src/pyax25_22/utils/logging.py
+Structured logging configuration.
+.TP
+.I docs/smack_spec.md
+SMACK (Stuttgart Modified Amateurradio-CRC-KISS) protocol specification.
+.TP
+.I docs/kiss_spec.md
+KISS protocol specification.
+.TP
+.I docs/agwpe_spec.md
+AGWPE protocol specification.
+.SH ERRORS
+All errors raise exceptions that inherit from
+.B pyax25_22.core.exceptions.AX25Error.
+.PP
+Frame parsing errors raise
+.B FrameError
+or a subclass (InvalidAddressError, FCSError, BitStuffingError).
+.PP
+State machine violations raise
+.B ConnectionStateError.
+.PP
+Transport failures raise
+.B KISSError
+or
+.B AGWPEError.
+.PP
+Configuration errors raise
+.B ConfigurationError.
+.SH STANDARDS
+.TP
+AX.25 Link Access Protocol for Amateur Packet Radio, Version 2.2, July 1998.
+.TP
+KISS TNC: A Simple Host-to-TNC Communications Protocol, Mike Chepponis K3MC and Phil Karn KA9Q, 1986.
+.TP
+SMACK -- Stuttgart Modified Amateurradio-CRC-KISS, Jan Schiefer DL5UE and Dieter Deyke DK5SG, 1991.
+.TP
+AGWPE TCP/IP Socket Interface, George Rossopoulos SV2AGW, 2000.
+.SH SEE ALSO
+.BR python3 (1),
+.BR pyserial (3)
+.PP
+Project homepage: https://github.com/ke4ahr/PyAX25_22
+.PP
+BPQ32 reference implementation: https://github.com/g8bpq/BPQ32
+.SH BUGS
+Report bugs at: https://github.com/ke4ahr/PyAX25_22/issues
+.SH AUTHOR
+Kris Kirby, KE4AHR <ke4ahr@gmail.com>
+.SH COPYRIGHT
+Copyright (C) 2026 Kris Kirby, KE4AHR.
+.PP
+License: GNU General Public License v3.0 or later (GPL-3.0-or-later).
+.PP
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.
