@@ -56,7 +56,7 @@ def on_data_frame(tnc_addr: int, port: int, frame) -> None:
     except Exception:
         info_text = f"<binary data: {len(frame.info)} bytes>"
 
-    print(f"[{tnc_addr:02X}:{port}] {frame.source.callsign}-{frame.source.ssid} → "
+    print(f"[{tnc_addr:02X}:{port}] {frame.source.callsign}-{frame.source.ssid} -> "
           f"{frame.destination.callsign}-{frame.destination.ssid}: {info_text}")
 
 

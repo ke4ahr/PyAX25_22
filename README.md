@@ -79,7 +79,7 @@ For development (includes testing and documentation tools):
     kiss = KISSInterface("/dev/ttyUSB0", baudrate=9600, tnc_address=1)
 
     def on_frame(tnc_addr, port, frame):
-        print(f"TNC {tnc_addr} | {frame.source.callsign}-{frame.source.ssid} → {frame.destination.callsign}")
+        print(f"TNC {tnc_addr} | {frame.source.callsign}-{frame.source.ssid} -> {frame.destination.callsign}")
 
     kiss.register_callback(0x00, on_frame)  # Data frames
     kiss.connect()
@@ -98,7 +98,7 @@ For development (includes testing and documentation tools):
     agwpe = AGWPEInterface()
 
     def on_monitored(port, fr, to, data):
-        print(f"[{port}] {fr} → {to}: {data.decode(errors='ignore')}")
+        print(f"[{port}] {fr} -> {to}: {data.decode(errors='ignore')}")
 
     agwpe.register_callback('M', on_monitored)
     agwpe.connect()

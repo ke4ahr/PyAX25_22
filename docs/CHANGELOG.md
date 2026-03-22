@@ -8,7 +8,7 @@
 - **Version:** Bumped to 1.0.1 across all files (pyproject.toml, setup.py, `__version__`, man page, docs)
 - **Copyright:** Standardized to 2025-2026 across all source and documentation files
 - **Docs:** Removed duplicate copyright notices from all documentation files
-- **Docs:** Fixed stale license strings (`LGPLv3.0` → `LGPL-3.0-or-later`) in spec documents
+- **Docs:** Fixed stale license strings (`LGPLv3.0` -> `LGPL-3.0-or-later`) in spec documents
 - **Docs:** Updated IMPLEMENTATION_PLAN, HANDOFF, architecture_paper, compliance with current status
 - **Docs:** Fixed broken `api_reference.md` link in README to `api_specification.md`
 - **Docs:** Added v0.6.5 and v1.0.1 entries to CHANGELOG

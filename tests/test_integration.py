@@ -7,7 +7,7 @@ tests/test_integration.py
 Integration tests for full Layer 2 operation.
 
 Covers:
-- Complete connection lifecycle (SABM → UA → I-frames → DISC → DM)
+- Complete connection lifecycle (SABM -> UA -> I-frames -> DISC -> DM)
 - Timer interactions (T1 timeout, retry)
 - Flow control integration
 - Modulo 8 and 128 behavior

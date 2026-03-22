@@ -56,7 +56,7 @@ def on_monitored_frame(port: int, fr: str, to: str, data: bytes) -> None:
     except Exception:
         data_text = f"<binary data: {len(data)} bytes>"
 
-    print(f"[{port}] {fr} → {to}: {data_text}")
+    print(f"[{port}] {fr} -> {to}: {data_text}")
 
 
 def main() -> None:
@@ -86,7 +86,7 @@ def main() -> None:
                 port, kind, fr, to, data = agwpe.receive(timeout=1.0)
                 # Primary handling via callback, fallback print for other kinds
                 if kind != 'M':
-                    print(f"Raw [{port}] {kind}: {fr} → {to} ({len(data)} bytes)")
+                    print(f"Raw [{port}] {kind}: {fr} -> {to} ({len(data)} bytes)")
             except Exception as e:
                 # Timeout is normal - continue loop
                 if "timeout" not in str(e).lower():
