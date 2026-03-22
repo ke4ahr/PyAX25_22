@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
-# Copyright (C) 2026 Kris Kirby, KE4AHR
+# Copyright (C) 2025-2026 Kris Kirby, KE4AHR
 
 """
 examples/basic_ui.py
@@ -32,7 +32,7 @@ def main() -> None:
         source=source,
         control=0x03,          # UI frame (unconnected)
         pid=0xF0,              # No Layer 3 protocol
-        info=b"PyAX25_22 v0.1.0 beacon - 73 de KE4AHR"
+        info=b"PyAX25_22 v1.0.1 beacon - 73 de KE4AHR"
     )
 
     # Encode the full frame (includes flags, bit stuffing, FCS)

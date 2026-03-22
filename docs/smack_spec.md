@@ -313,4 +313,4 @@ As of 1991, SMACK was implemented in:
 
 ---
 
-Copyright (C) 2026 Kris Kirby, KE4AHR
+Copyright (C) 2025-2026 Kris Kirby, KE4AHR

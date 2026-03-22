@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
-# Copyright (C) 2026 Kris Kirby, KE4AHR
+# Copyright (C) 2025-2026 Kris Kirby, KE4AHR
 
 """
 interfaces/fx25/decoder.py
@@ -85,6 +85,7 @@ class FX25Decoder:
             self._process_byte(byte)
 
     def _process_byte(self, byte: int) -> None:
+        """Route one byte to _hunt() or _collect() depending on current state."""
         if self._state == _State.HUNT:
             self._hunt(byte)
         else:

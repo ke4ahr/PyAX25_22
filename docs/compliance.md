@@ -1,7 +1,7 @@
 # PyAX25_22 AX.25 v2.2 Compliance Report
 
 **Date:** January 02, 2026  
-**Version:** 0.1.0  
+**Version:** 1.0.1  
 **Author:** Kris Kirby, KE4AHR
 
 ## Compliance Status: Fully Compliant
@@ -32,18 +32,21 @@ PyAX25_22 implements **AX.25 v2.2** (July 1998) Link Layer protocol in full, wit
 - **Unconnected mode**
   - UI frames for beacons, APRS, PACSAT broadcasts
 - **Transport interfaces**
-  - KISS with full multi-drop support (G8BPQ extension)
-  - AGWPE TCP/IP API complete client
+  - KISS over serial (KISSSerial) and TCP (KISSTCP)
+  - XKISS multi-drop with active/passive polling and per-port DIGIPEAT
+  - SMACK (Stuttgart Modified Amateur Radio CRC-KISS) with CRC-16 auto-switch
+  - AGWPE TCP/IP complete client (AGWPEClient) and bridge to serial TNC (AGWSerial)
+  - FX.25 Reed-Solomon forward error correction (FX25Encoder, FX25Decoder)
 - **Concurrency**
-  - Synchronous and asynchronous APIs
-  - Thread-safe background I/O
+  - Synchronous (threaded) APIs: KISSSerial, KISSTCP, XKISS, SMACK, AGWPEClient
+  - Asynchronous (asyncio) APIs: AsyncKISSTCP, AsyncAGWPEClient
+  - Thread-safe background I/O with locks and queues
 
 ### Testing
 
-- Comprehensive unit tests for all modules
-- End-to-end integration tests
-- >95% code coverage
-- Automated compliance validation script (`evaluations/compliance_report.py`)
+- 324/324 unit and integration tests passing (100%)
+- End-to-end integration tests with mock transports
+- Automated compliance validation script (`evaluations/compliant_report.py`)
 
 ### Reference Documents
 
@@ -59,4 +62,4 @@ Implementation based directly on:
 
 73 de KE4AHR
 
-Copyright (C) 2026 Kris Kirby, KE4AHR
+Copyright (C) 2025-2026 Kris Kirby, KE4AHR

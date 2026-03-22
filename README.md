@@ -5,7 +5,7 @@
 
 **Author:** Kris Kirby, KE4AHR  
 **License:** GNU Lesser General Public License v3 or later (LGPL-3.0-or-later)  
-**Version:** 0.5.15  
+**Version:** 1.0.1  
 **Release Date:** January 05, 2026  
 **Repository:** https://github.com/ke4ahr/PyAX25_22
 
@@ -114,7 +114,7 @@ For development (includes testing and documentation tools):
 ## Documentation
 
 - Compliance Report: [docs/compliance.md](docs/compliance.md)
-- API Reference: [docs/api_reference.md](docs/api_reference.md)
+- API Reference: [docs/api_specification.md](docs/api_specification.md)
 - Examples: [examples/](examples/)
 
 ## References
@@ -146,4 +146,3 @@ Full license text: [LICENSE](LICENSE)
 
 Copyright (C) 2025-2026 Kris Kirby, KE4AHR
 
-Copyright (C) 2026 Kris Kirby, KE4AHR

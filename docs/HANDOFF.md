@@ -46,7 +46,7 @@ Reference implementation for protocol details: BPQ32 (https://github.com/g8bpq/B
 
 ## 3. Current State Analysis
 
-### 3.1 PyAX25_22 (v0.5.97 per setup.py; CHANGELOG stops at v0.5.27 -- CHANGELOG is outdated)
+### 3.1 PyAX25_22 (v1.0.1 -- all phases complete; CHANGELOG current)
 
 **Strengths:**
 - Complete AX.25 frame encoding/decoding (AX25Frame, AX25Address)
@@ -412,4 +412,3 @@ ls ~/tmp/code/ham/packet/PyAGW3/PyAGW3/
 *Copyright (C) 2025-2026 Kris Kirby, KE4AHR*
 *73 de KE4AHR*
 
-Copyright (C) 2026 Kris Kirby, KE4AHR

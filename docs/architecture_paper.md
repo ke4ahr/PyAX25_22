@@ -2,7 +2,7 @@
 
 **Author:** Kris Kirby, KE4AHR
 **Date:** 2026-03-21
-**Version:** 0.5.97
+**Version:** 1.0.1
 **License:** LGPL-3.0-or-later
 
 ---
@@ -36,11 +36,13 @@ PyAX25_22 was designed to:
 3. Support both synchronous (threading) and asynchronous (asyncio) operation.
 4. Serve as the single packet radio dependency for PyPACSAT.
 5. Integrate KISS, XKISS, SMACK, and AGWPE from separate libraries (PyXKISS, PyAGW3) into one cohesive library.
-6. Add FX.25 forward error correction support (planned).
+6. Add FX.25 forward error correction support (implemented -- Phase 4).
 
 ### 1.3 Scope
 
-This paper covers the currently implemented core and interface layers. The FX.25 encoder/decoder is planned but not yet implemented. Async wrappers (AsyncKISSTCP, AsyncAGWPEClient) are designed but not yet complete.
+This paper covers the complete library as of v1.0.1. All phases (0-5) are implemented:
+FX.25 encoder/decoder (Phase 4) and async wrappers AsyncKISSTCP and AsyncAGWPEClient
+(Phase 5) are fully implemented and tested. 324/324 tests pass.
 
 ---
 
@@ -368,7 +370,7 @@ The test suite uses pytest and covers:
 | test_transport_compliance.py | Transport validation helpers |
 | test_integration.py | End-to-end connection lifecycle (requires pytest-asyncio) |
 
-Total: 131 passing tests (non-async); 14 async integration tests pending pytest-asyncio.
+Total: 324/324 tests passing.
 
 ---
 
@@ -376,13 +378,13 @@ Total: 131 passing tests (non-async); 14 async integration tests pending pytest-
 
 | ID | Location | Description | Status |
 |----|----------|-------------|--------|
-| B1 | connected.py | I-frame retransmission from V(A) after REJ is a stub (logs but does not resend) | Known, planned |
-| B2 | connected.py | SREJ single-frame retransmission is a stub | Known, planned |
-| B3 | interfaces/* | No TCP KISS transport yet (KISSTCP class) | Planned -- Phase 1 |
-| B4 | interfaces/* | No XKISS (G8BPQ multi-drop) implementation yet | Planned -- Phase 2 |
-| B5 | interfaces/* | No SMACK (Stuttgart CRC-KISS) implementation yet | Planned -- Phase 2 |
-| B6 | -- | No FX.25 (Reed-Solomon FEC) implementation yet | Planned -- Phase 4 |
-| B7 | -- | No asyncio transport implementations yet | Planned -- Phase 5 |
+| B1 | connected.py | I-frame retransmission from V(A) after REJ | Implemented |
+| B2 | connected.py | SREJ single-frame retransmission | Implemented |
+| B3 | interfaces/kiss/ | KISSTCP -- KISS over TCP | Implemented (Phase 1) |
+| B4 | interfaces/kiss/ | XKISS G8BPQ multi-drop | Implemented (Phase 2) |
+| B5 | interfaces/kiss/ | SMACK CRC-KISS | Implemented (Phase 2) |
+| B6 | interfaces/fx25/ | FX.25 Reed-Solomon FEC | Implemented (Phase 4) |
+| B7 | interfaces/kiss/, interfaces/agw/ | AsyncKISSTCP, AsyncAGWPEClient | Implemented (Phase 5) |
 
 ---
 
@@ -405,11 +407,12 @@ Total: 131 passing tests (non-async); 14 async integration tests pending pytest-
 | Frame structure validation | Implemented |
 | KISS serial transport | Implemented |
 | AGWPE TCP transport | Implemented |
-| Multi-Drop KISS (XKISS) | Planned |
-| SMACK (CRC-KISS) | Planned |
-| KISS over TCP | Planned |
-| FX.25 (Reed-Solomon FEC) | Planned |
-| Async transports | Planned |
+| Multi-Drop KISS (XKISS) | Implemented (Phase 2) |
+| SMACK (CRC-KISS) | Implemented (Phase 2) |
+| KISS over TCP | Implemented (Phase 1) |
+| AGWSerial bridge | Implemented (Phase 3.2) |
+| FX.25 (Reed-Solomon FEC) | Implemented (Phase 4) |
+| Async transports | Implemented (Phase 5) |
 
 ---
 
@@ -896,4 +899,4 @@ Block for and return next frame as (port, data_kind, call_from, call_to, data).
 
 ---
 
-Copyright (C) 2026 Kris Kirby, KE4AHR
+Copyright (C) 2025-2026 Kris Kirby, KE4AHR

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
-# Copyright (C) 2026 Kris Kirby, KE4AHR
+# Copyright (C) 2025-2026 Kris Kirby, KE4AHR
 
 """
 interfaces/fx25/rs.py
@@ -208,6 +208,7 @@ _GEN_CACHE: dict = {}
 
 
 def _get_generator(ncheck: int) -> List[int]:
+    """Return cached RS generator polynomial for ncheck check symbols."""
     if ncheck not in _GEN_CACHE:
         _GEN_CACHE[ncheck] = _make_generator(ncheck)
     return _GEN_CACHE[ncheck]

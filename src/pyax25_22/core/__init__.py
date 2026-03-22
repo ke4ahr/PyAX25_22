@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
-# Copyright (C) 2026 Kris Kirby, KE4AHR
+# Copyright (C) 2025-2026 Kris Kirby, KE4AHR
 
 """
 pyax25_22.core.__init__.py
@@ -52,7 +52,7 @@ from .exceptions import (
 )
 
 # Version
-__version__ = "0.5.97"
+__version__ = "1.0.1"
 
 # Public API list - explicitly exported symbols
 __all__ = [

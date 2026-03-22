@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
-# Copyright (C) 2026 Kris Kirby, KE4AHR
+# Copyright (C) 2025-2026 Kris Kirby, KE4AHR
 
 """
 evaluations/compliance_report.py
@@ -78,7 +78,7 @@ def main() -> int:
     print("PyAX25_22 AX.25 v2.2 Compliance Validation Report")
     print("=" * 60)
     print(f"Date: January 02, 2026")
-    print(f"Version: 0.1.0")
+    print(f"Version: 1.0.1")
     print(f"Project: https://github.com/ke4ahr/PyAX25_22")
     print()
 
