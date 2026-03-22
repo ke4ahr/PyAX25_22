@@ -1,5 +1,5 @@
-# SPDX-License-Identifier: LGPL-3.0-or-later
-# Copyright (C) 2025-2026 Kris Kirby, KE4AHR
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Kris Kirby, KE4AHR
 
 """
 tests/test_transport_compliance.py
@@ -76,8 +76,8 @@ def test_agwpe_header_format():
 def test_transport_validation_kiss():
     """Test KISS transport round-trip validation."""
     serial = MockSerial()
-    transport = KISSInterface("mock_port")
-    transport.serial = serial
+    with patch("serial.Serial", return_value=serial):
+        transport = KISSInterface("mock_port")
 
     # Test frame encoding/decoding
     frame = AX25Frame(
@@ -116,8 +116,8 @@ def test_transport_validation_agwpe():
 def test_kiss_send_receive_mock():
     """Test full KISS send/receive with mock serial and delays."""
     serial = MockSerial()
-    transport = KISSInterface("mock_port")
-    transport.serial = serial
+    with patch("serial.Serial", return_value=serial):
+        transport = KISSInterface("mock_port")
 
     # Test send/receive
     frame = AX25Frame(

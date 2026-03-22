@@ -9,6 +9,7 @@ Public re-exports for the pyax25_22 AGW Packet Engine interface package.
 
 from .client import AGWPEClient, AGWPEFrame
 from .serial import AGWSerial
+from .async_client import AsyncAGWPEClient
 from .exceptions import (
     AGWConnectionError,
     AGWFrameError,
@@ -44,6 +45,7 @@ __all__ = [
     "AGWPEClient",
     "AGWPEFrame",
     "AGWSerial",
+    "AsyncAGWPEClient",
     "AGWConnectionError",
     "AGWFrameError",
     "AGWLoginError",
