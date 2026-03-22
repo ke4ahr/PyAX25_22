@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
-# Copyright (C) 2025-2026 Kris Kirby, KE4AHR
+# Copyright (C) 2026 Kris Kirby, KE4AHR
 
 """
 tests/test_integration.py
@@ -14,7 +14,11 @@ Covers:
 """
 
 import pytest
-import pytest_asyncio
+try:
+    import pytest_asyncio
+    HAS_ASYNCIO = True
+except ImportError:
+    HAS_ASYNCIO = False
 import time
 import asyncio
 

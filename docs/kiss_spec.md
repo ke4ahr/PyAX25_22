@@ -112,3 +112,5 @@ Example:
 3. AX.25 Link Layer Protocol
 4. PyAX25_22 Source Code
 
+
+Copyright (C) 2026 Kris Kirby, KE4AHR

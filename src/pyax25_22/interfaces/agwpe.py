@@ -1,321 +1,578 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
-# Copyright (C) 2025-2026 Kris Kirby, KE4AHR
+# Copyright (C) 2026 Kris Kirby, KE4AHR
 
 """
-pyax25_22.interfaces.agwpe.py
+pyax25_22.interfaces.agwpe -- AGWPE TCP/IP API client.
 
-Full AGWPE TCP/IP API client implementation.
+AGWPE (AGW Packet Engine) is a Windows program by George Rossopoulos
+(SV2AGW) that talks to a TNC and provides a TCP socket API so other
+programs can send and receive AX.25 frames over the network.
 
-Implements the complete AGWPE TCP/IP Socket Interface per SV2AGW specification (2000 version, with updates).
-Supports:
-- Connection to AGWPE server (default localhost:8000)
-- Callsign registration ('X' command with success/failure reply)
-- Monitoring enable/disable ('m' command)
-- Raw frame monitoring ('k' command)
-- Port capabilities query ('g' command)
-- Version info query ('R' command)
-- Outstanding frames query ('y' command)
-- Unproto and connected data send/receive ('U', 'D', 'c', 'd')
-- Heard list ('H')
-- Monitor data kinds ('I', 'S', 'T', 'U')
-- Full header parsing (Port, DataKind, CallFrom, CallTo, DataLen, USER)
-- Synchronous (threading for background read) and asynchronous (asyncio) modes
-- Comprehensive error handling and logging
+Think of AGWPE as a bridge:
 
-Compliant with AGWPE API as described in AgwSockInterface.doc and related docs.
+  Your program  <--- TCP socket --->  AGWPE server  <--- serial --->  TNC  <--- radio
+
+All communication over the TCP socket uses a 36-byte binary header
+followed by optional data. The header says what kind of message it is
+(data, connection, version query, etc.) and who it is from and to.
+
+This file implements a synchronous AGWPE client with a background
+reader thread. It also exposes the AGWPE DataKind constants so callers
+can check what kind of frame they received.
+
+Known bug (documented, not fixed here): some implementations send
+``b'R'`` for callsign registration but the spec says it should be
+``b'X'``. This implementation uses the correct ``X`` command.
+
+Compliant with the AGWPE Socket Interface specification (SV2AGW, 2000).
 """
 
 from __future__ import annotations
 
+import queue
 import socket
 import struct
 import threading
-import queue
-import asyncio
 import logging
-from typing import Optional, Callable, Tuple, Dict
+from typing import Callable, Dict, Optional, Tuple
 
 from pyax25_22.core.exceptions import AGWPEError
-from pyax25_22.core.framing import AX25Frame  # For potential frame integration
 
 logger = logging.getLogger(__name__)
 
-# AGWPE Header format (36 bytes)
-# int Port (4 bytes): LOWORD = port index (0-first), HIWORD reserved
-# int DataKind (4 bytes): LOWORD = kind (ASCII char code), HIWORD special use (e.g., for 'Y' reply)
-# char CallFrom[10]: NULL-terminated callsign (e.g., "SV2AGW-12\0")
-# char CallTo[10]: NULL-terminated callsign
-# int DataLen (4 bytes): Length of data field
-# int USER (4 bytes): Reserved/undefined
-HEADER_FMT = '<II10s10sII'
-HEADER_SIZE = struct.calcsize(HEADER_FMT)
 
-# DataKind values (ASCII chars)
-DATAKIND_CONNECTED_DATA = 'D'  # Data from connected station
-DATAKIND_UNPROTO_MONITOR = 'U'  # Unproto monitor data
-DATAKIND_TX_MONITOR = 'T'  # TX data monitor
-DATAKIND_MONITOR_HEADER = 'S'  # Monitor header only
-DATAKIND_MONITOR_FULL = 'I'  # Monitor header + data
-DATAKIND_NEW_CONNECTION = 'c'  # New connection established
-DATAKIND_DISCONNECT = 'd'  # Disconnect or retry out
-DATAKIND_HEARD_LIST = 'H'  # Heard list (line by line)
-DATAKIND_REGISTRATION = 'X'  # Registration reply (success/failure)
-DATAKIND_OUTSTANDING = 'Y'  # Outstanding frames in queue
-DATAKIND_PORT_CAPABILITIES = 'g'  # Radio port capabilities
-DATAKIND_VERSION = 'R'  # AGWPE version info
-DATAKIND_RAW_FRAMES = 'k'  # Raw AX25 frames
-DATAKIND_MONITORING = 'm'  # Monitoring control
+# ---------------------------------------------------------------------------
+# AGWPE header format
+# ---------------------------------------------------------------------------
 
-# Send kinds
-SENDKIND_CONNECT_NO_DIGI = 'c'  # Connect without digis
-SENDKIND_CONNECT_DIGI = 'v'  # Connect with digis
-SENDKIND_DISCONNECT = 'd'  # Disconnect
-SENDKIND_DATA = 'D'  # Send data to connected station
-SENDKIND_UNPROTO = 'U'  # Send unproto (beacon/CQ)
-SENDKIND_PORT_INFO = 'P'  # Port information
-SENDKIND_UNPROTO_VIA = 'V'  # Unproto with via
+#: Struct format string for the 36-byte AGWPE frame header.
+#:   Port      -- 4 bytes (LOWORD = port index 0+, HIWORD reserved)
+#:   DataKind  -- 4 bytes (LOWORD = ASCII command byte, HIWORD = extra)
+#:   CallFrom  -- 10 bytes (NULL-terminated callsign, max 9 chars + NUL)
+#:   CallTo    -- 10 bytes (NULL-terminated callsign, max 9 chars + NUL)
+#:   DataLen   -- 4 bytes (number of data bytes that follow the header)
+#:   USER      -- 4 bytes (reserved / undefined, always 0)
+HEADER_FMT: str = "<II10s10sII"
+HEADER_SIZE: int = struct.calcsize(HEADER_FMT)
+
+# ---------------------------------------------------------------------------
+# DataKind constants (AGWPE frame type codes, ASCII values)
+# ---------------------------------------------------------------------------
+
+#: DataKind 'D': Connected-mode data received from remote station.
+DATAKIND_CONNECTED_DATA: str = "D"
+
+#: DataKind 'U': Unproto (UI) frame received -- monitoring data.
+DATAKIND_UNPROTO_MONITOR: str = "U"
+
+#: DataKind 'T': Transmitted frame (TX monitor data).
+DATAKIND_TX_MONITOR: str = "T"
+
+#: DataKind 'S': Monitor header only (no data body).
+DATAKIND_MONITOR_HEADER: str = "S"
+
+#: DataKind 'I': Monitor header + full frame data.
+DATAKIND_MONITOR_FULL: str = "I"
+
+#: DataKind 'c': A new connected-mode session was established.
+DATAKIND_NEW_CONNECTION: str = "c"
+
+#: DataKind 'd': A connected-mode session was disconnected or timed out.
+DATAKIND_DISCONNECT: str = "d"
+
+#: DataKind 'H': Heard list response (one callsign per reply).
+DATAKIND_HEARD_LIST: str = "H"
+
+#: DataKind 'X': Callsign registration reply (success or failure).
+DATAKIND_REGISTRATION: str = "X"
+
+#: DataKind 'Y': Outstanding frames in queue for a connection.
+DATAKIND_OUTSTANDING: str = "Y"
+
+#: DataKind 'g': Radio port capabilities response.
+DATAKIND_PORT_CAPABILITIES: str = "g"
+
+#: DataKind 'R': AGWPE version information response.
+DATAKIND_VERSION: str = "R"
+
+#: DataKind 'k': Raw AX.25 frame monitor data.
+DATAKIND_RAW_FRAMES: str = "k"
+
+#: DataKind 'm': Monitoring control toggle.
+DATAKIND_MONITORING: str = "m"
+
+
+# ---------------------------------------------------------------------------
+# AGWPE-specific exceptions
+# ---------------------------------------------------------------------------
 
 class AGWPEConnectionError(AGWPEError):
-    """Specific error for connection issues."""
-    pass
+    """Failed to connect to or communicate with the AGWPE server.
+
+    Raised when the TCP connection to the AGWPE server cannot be
+    established or is lost, or when a send fails.
+    """
+
 
 class AGWPEFrameError(AGWPEError):
-    """Specific error for frame parsing issues."""
-    pass
+    """An AGWPE frame could not be parsed.
+
+    Raised when the header is the wrong size, the data is truncated,
+    or the connection closes while we are in the middle of reading
+    a frame.
+    """
+
+
+# ---------------------------------------------------------------------------
+# AGWPE client
+# ---------------------------------------------------------------------------
 
 class AGWPEInterface:
-    """
-    Synchronous AGWPE TCP/IP API client with threaded background reading.
+    """Synchronous AGWPE client with a background reader thread.
 
-    Usage:
-        client = AGWPEInterface()
+    Connects to an AGWPE server over TCP, sends commands (register
+    callsign, enable monitoring, send unproto, etc.), and receives
+    incoming frames in a background thread.
+
+    Attributes:
+        host: The AGWPE server hostname or IP address.
+        port: The TCP port to connect to (default 8000).
+        timeout: Socket timeout in seconds.
+
+    Raises:
+        AGWPEConnectionError: If the TCP connection fails.
+        AGWPEFrameError: If a received frame header is malformed.
+
+    Example::
+
+        client = AGWPEInterface(host="192.168.1.10")
         client.connect()
         client.register_callsign("KE4AHR-1")
         client.enable_monitoring()
         while True:
-            port, kind, call_from, call_to, data = client.receive()
-            print(f"Received {kind} from {call_from} to {call_to}")
+            port, kind, frm, to, data = client.receive(timeout=10.0)
+            print(f"[{kind}] {frm} -> {to}: {data[:32]!r}")
+        client.disconnect()
     """
 
-    def __init__(self, host: str = '127.0.0.1', port: int = 8000, timeout: float = 5.0):
-        """
-        Initialize AGWPE client.
+    def __init__(
+        self,
+        host: str = "127.0.0.1",
+        port: int = 8000,
+        timeout: float = 5.0,
+    ) -> None:
+        """Set up the AGWPE client. Does not connect yet.
 
         Args:
-            host: AGWPE server hostname or IP
-            port: TCP port (default 8000)
-            timeout: Socket timeout in seconds
+            host: The hostname or IP address of the AGWPE server.
+                Default is ``"127.0.0.1"`` (localhost).
+            port: The TCP port of the AGWPE server. Default is 8000.
+            timeout: Socket read timeout in seconds. Lower values make
+                the reader thread more responsive but use more CPU.
+                Default is 5.0.
         """
         self.host = host
         self.port = port
         self.timeout = timeout
+
         self.sock: Optional[socket.socket] = None
-        self._recv_queue = queue.Queue()
+        self._recv_queue: queue.Queue = queue.Queue()
         self._thread: Optional[threading.Thread] = None
-        self._running = False
+        self._running: bool = False
         self._callbacks: Dict[str, Callable] = {}
-        logger.info(f"AGWPEInterface initialized for {host}:{port}")
+
+        logger.info(
+            "AGWPEInterface initialized: host=%s port=%d timeout=%.1fs",
+            host, port, timeout,
+        )
+
+    # -----------------------------------------------------------------------
+    # Connect / disconnect
+    # -----------------------------------------------------------------------
 
     def connect(self) -> None:
-        """
-        Connect to AGWPE server and start reader thread.
+        """Open the TCP connection to the AGWPE server and start reading.
+
+        Raises:
+            AGWPEConnectionError: If the TCP connection cannot be made.
+
+        Example::
+
+            client.connect()
         """
         try:
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.sock.settimeout(self.timeout)
             self.sock.connect((self.host, self.port))
             self._running = True
-            self._thread = threading.Thread(target=self._reader_thread, daemon=True)
+            self._thread = threading.Thread(
+                target=self._reader_thread, daemon=True, name="AGWPEReader"
+            )
             self._thread.start()
-            logger.info("Connected to AGWPE server")
-        except socket.error as e:
-            logger.error(f"Connection failed: {e}")
-            raise AGWPEConnectionError(f"Failed to connect to {self.host}:{self.port}: {e}")
+            logger.info("Connected to AGWPE server at %s:%d", self.host, self.port)
+        except socket.error as exc:
+            logger.error(
+                "Failed to connect to AGWPE at %s:%d: %s",
+                self.host, self.port, exc,
+            )
+            raise AGWPEConnectionError(
+                f"Failed to connect to {self.host}:{self.port}: {exc}"
+            ) from exc
 
     def disconnect(self) -> None:
-        """
-        Disconnect from AGWPE server and stop reader thread.
+        """Close the TCP connection and stop the reader thread.
+
+        Safe to call even if already disconnected.
+
+        Example::
+
+            client.disconnect()
         """
         self._running = False
-        if self.sock:
+
+        if self.sock is not None:
             try:
                 self.sock.shutdown(socket.SHUT_RDWR)
             except socket.error:
                 pass
-            self.sock.close()
-            self.sock = None
-        if self._thread:
+            try:
+                self.sock.close()
+            except socket.error as exc:
+                logger.warning("Error closing socket: %s", exc)
+            finally:
+                self.sock = None
+
+        if self._thread is not None:
             self._thread.join(timeout=5.0)
             if self._thread.is_alive():
-                logger.warning("Reader thread did not join cleanly")
+                logger.warning("AGWPE reader thread did not stop cleanly")
             self._thread = None
+
         logger.info("Disconnected from AGWPE server")
 
-    def register_callsign(self, callsign: str) -> None:
-        """
-        Register a callsign with AGWPE ('X' command).
+    # -----------------------------------------------------------------------
+    # Command methods
+    # -----------------------------------------------------------------------
 
-        Expect 'X' reply for success/failure.
+    def register_callsign(self, callsign: str) -> None:
+        """Register a callsign with the AGWPE server (command 'X').
+
+        AGWPE will reply with an 'X' DataKind frame indicating success
+        or failure. Listen for it with ``receive()`` or a callback.
+
+        Args:
+            callsign: The callsign to register (e.g. ``"KE4AHR-1"``).
+                Maximum 9 characters.
+
+        Raises:
+            AGWPEConnectionError: If not connected or the send fails.
+
+        Example::
+
+            client.register_callsign("KE4AHR-1")
         """
-        self.send_frame(0, 'X', callsign, '')
-        logger.info(f"Registered callsign: {callsign}")
+        self._send_frame(0, "X", callsign, "")
+        logger.info("Sent callsign registration for %s", callsign)
 
     def enable_monitoring(self) -> None:
+        """Enable monitoring of all received frames ('m' command).
+
+        After enabling, the server will send 'U', 'I', 'S', and 'T'
+        frames for every packet it receives, not just those addressed
+        to registered callsigns.
+
+        Raises:
+            AGWPEConnectionError: If not connected or the send fails.
         """
-        Enable monitoring of frames ('m' command).
-        """
-        self.send_frame(0, 'm', '', '')
+        self._send_frame(0, "m", "", "")
         logger.info("Monitoring enabled")
 
     def disable_monitoring(self) -> None:
+        """Disable monitoring ('m' command toggled off).
+
+        Raises:
+            AGWPEConnectionError: If not connected or the send fails.
         """
-        Disable monitoring ('m' command again toggles).
-        """
-        self.send_frame(0, 'm', '', '')
+        self._send_frame(0, "m", "", "")
         logger.info("Monitoring disabled")
 
-    def query_outstanding_frames(self, port: int = 0, callsign: str = '') -> None:
-        """
-        Query outstanding frames in queue ('y' command).
+    def query_outstanding_frames(
+        self,
+        port: int = 0,
+        callsign: str = "",
+    ) -> None:
+        """Ask how many frames are queued for transmission ('y' command).
+
+        The server replies with a 'Y' DataKind frame containing the count
+        in the DataLen field (not as data bytes).
 
         Args:
-            port: Radio port to query
-            callsign: Optional callsign to query specific
+            port: Radio port to query (0-based index).
+            callsign: Optional callsign to query a specific connection.
+
+        Raises:
+            AGWPEConnectionError: If not connected or the send fails.
         """
-        self.send_frame(port, 'y', callsign, callsign)
-        logger.info(f"Queried outstanding frames for port {port}")
+        self._send_frame(port, "y", callsign, callsign)
+        logger.debug("Queried outstanding frames for port=%d callsign=%s", port, callsign)
 
     def query_port_capabilities(self, port: int = 0) -> None:
+        """Ask for the capabilities of a radio port ('g' command).
+
+        The server replies with a 'g' DataKind frame.
+
+        Args:
+            port: The radio port to query (0-based index).
+
+        Raises:
+            AGWPEConnectionError: If not connected or the send fails.
         """
-        Query radio port capabilities ('g' command).
-        """
-        self.send_frame(port, 'g', '', '')
-        logger.info(f"Queried capabilities for port {port}")
+        self._send_frame(port, "g", "", "")
+        logger.debug("Queried capabilities for port=%d", port)
 
     def query_version(self) -> None:
+        """Ask for the AGWPE software version ('R' command).
+
+        The server replies with an 'R' DataKind frame.
+
+        Raises:
+            AGWPEConnectionError: If not connected or the send fails.
         """
-        Query AGWPE version ('R' command).
-        """
-        self.send_frame(0, 'R', '', '')
-        logger.info("Queried AGWPE version")
+        self._send_frame(0, "R", "", "")
+        logger.debug("Queried AGWPE version")
 
     def enable_raw_frames(self) -> None:
-        """
-        Enable raw AX25 frame reception ('k' command).
-        """
-        self.send_frame(0, 'k', '', '')
-        logger.info("Raw frames enabled")
+        """Enable reception of raw AX.25 frames ('k' command).
 
-    def register_callback(self, data_kind: str, callback: Callable[[int, str, str, bytes], None]) -> None:
+        After enabling, the server sends a 'k' DataKind frame for every
+        raw frame it receives, including frames that AGWPE would normally
+        not pass up (e.g., frames addressed to other stations).
+
+        Raises:
+            AGWPEConnectionError: If not connected or the send fails.
         """
-        Register callback for specific DataKind.
+        self._send_frame(0, "k", "", "")
+        logger.info("Raw frame monitoring enabled")
+
+    # -----------------------------------------------------------------------
+    # Callback registration
+    # -----------------------------------------------------------------------
+
+    def register_callback(
+        self,
+        data_kind: str,
+        callback: Callable[[int, str, str, bytes], None],
+    ) -> None:
+        """Register a function to call when a specific DataKind is received.
+
+        The callback is called from the reader thread. It must be
+        thread-safe and should return quickly.
 
         Args:
-            data_kind: ASCII char (e.g., 'D' for data)
-            callback: Function(port, call_from, call_to, data)
+            data_kind: Single ASCII character (e.g. ``"D"`` for connected
+                data, ``"U"`` for unproto, ``"X"`` for registration reply).
+            callback: A callable with signature
+                ``(port: int, call_from: str, call_to: str, data: bytes)``.
+
+        Example::
+
+            def on_data(port, frm, to, data):
+                print(f"Data from {frm}: {data!r}")
+
+            client.register_callback("D", on_data)
         """
+        if len(data_kind) != 1:
+            raise ValueError(
+                f"data_kind must be a single ASCII character, got {data_kind!r}"
+            )
         self._callbacks[data_kind] = callback
-        logger.debug(f"Registered callback for DataKind '{data_kind}'")
+        logger.debug("Registered callback for DataKind '%s'", data_kind)
 
-    def send_frame(self, port: int, data_kind: str, call_from: str, call_to: str, data: bytes = b'') -> None:
-        """
-        Send AGWPE frame with proper header.
+    # -----------------------------------------------------------------------
+    # Frame sending
+    # -----------------------------------------------------------------------
+
+    def _send_frame(
+        self,
+        port: int,
+        data_kind: str,
+        call_from: str,
+        call_to: str,
+        data: bytes = b"",
+    ) -> None:
+        """Build and send one AGWPE frame over the TCP socket.
+
+        Packs the 36-byte header followed by the data bytes and sends
+        the whole thing in one ``sendall()`` call.
 
         Args:
-            port: Radio port index
-            data_kind: Single ASCII char (e.g., 'U' for unproto)
-            call_from: Source callsign (up to 9 chars + \0)
-            call_to: Destination callsign (up to 9 chars + \0)
-            data: Payload bytes
+            port: Radio port index (0-based).
+            data_kind: Single ASCII character command code.
+            call_from: Source callsign (up to 9 characters). Padded
+                with NUL bytes to exactly 10 bytes.
+            call_to: Destination callsign (up to 9 characters).
+            data: Optional data payload bytes. Default is empty.
+
+        Raises:
+            AGWPEConnectionError: If not connected or the send fails.
         """
-        if not self.sock:
-            raise AGWPEConnectionError("Not connected")
+        if self.sock is None:
+            raise AGWPEConnectionError("Not connected -- call connect() first")
 
-        call_from_b = call_from.encode('ascii').ljust(10, b'\0')
-        call_to_b = call_to.encode('ascii').ljust(10, b'\0')
-        data_len = len(data)
-        user_reserved = 0  # Always 0
+        call_from_b = call_from.encode("ascii")[:9].ljust(10, b"\x00")
+        call_to_b = call_to.encode("ascii")[:9].ljust(10, b"\x00")
 
-        # Pack header: Port (LOWORD), DataKind (ord(kind)), CallFrom, CallTo, DataLen, USER
-        header = struct.pack(HEADER_FMT, port, ord(data_kind), call_from_b, call_to_b, data_len, user_reserved)
+        header = struct.pack(
+            HEADER_FMT,
+            port,
+            ord(data_kind),
+            call_from_b,
+            call_to_b,
+            len(data),
+            0,   # USER field -- always 0
+        )
         full_frame = header + data
 
         try:
             self.sock.sendall(full_frame)
-            logger.info(
-                f"Sent frame: Port={port}, DataKind='{data_kind}', "
-                f"From={call_from}, To={call_to}, Len={data_len}"
+            logger.debug(
+                "_send_frame: port=%d kind='%s' from=%s to=%s data=%d bytes",
+                port, data_kind, call_from, call_to, len(data),
             )
-        except socket.error as e:
-            logger.error(f"Send failed: {e}")
-            raise AGWPEConnectionError(f"Send failed: {e}")
+        except socket.error as exc:
+            logger.error("_send_frame: socket send failed: %s", exc)
+            raise AGWPEConnectionError(f"AGWPE send failed: {exc}") from exc
+
+    # -----------------------------------------------------------------------
+    # Frame receiving
+    # -----------------------------------------------------------------------
+
+    def receive(
+        self,
+        timeout: Optional[float] = None,
+    ) -> Tuple[int, str, str, str, bytes]:
+        """Wait for and return the next received AGWPE frame.
+
+        Blocks until a frame is available in the queue or the timeout
+        expires. Frames arrive in the order they were received.
+
+        Args:
+            timeout: How many seconds to wait. None waits forever.
+                0 does a non-blocking check.
+
+        Returns:
+            A 5-tuple of:
+            - port (int): The radio port index.
+            - data_kind (str): Single character DataKind code.
+            - call_from (str): Source callsign.
+            - call_to (str): Destination callsign.
+            - data (bytes): The data payload (may be empty).
+
+        Raises:
+            AGWPEConnectionError: If the timeout expires before a frame
+                arrives.
+
+        Example::
+
+            port, kind, frm, to, data = client.receive(timeout=5.0)
+        """
+        try:
+            return self._recv_queue.get(timeout=timeout)
+        except queue.Empty:
+            raise AGWPEConnectionError("receive: timeout -- no frame received")
+
+    # -----------------------------------------------------------------------
+    # Reader thread (internal)
+    # -----------------------------------------------------------------------
 
     def _reader_thread(self) -> None:
-        """Background thread to read and process AGWPE frames."""
+        """Background thread that reads AGWPE frames from the TCP socket.
+
+        Continuously reads 36-byte headers, then the data body, and puts
+        each frame into the receive queue. Calls registered callbacks.
+        Stops when ``self._running`` becomes False or the connection drops.
+        """
+        logger.debug("AGWPE reader thread started")
+
         while self._running:
             try:
                 header_data = self._recv_exact(HEADER_SIZE)
                 if not header_data:
                     break
 
-                # Unpack header
-                port, data_kind_int, call_from_b, call_to_b, data_len, user = struct.unpack(HEADER_FMT, header_data)
-                data_kind = chr(data_kind_int)
-                call_from = call_from_b.rstrip(b'\0').decode('ascii', errors='ignore')
-                call_to = call_to_b.rstrip(b'\0').decode('ascii', errors='ignore')
+                port, dk_int, call_from_b, call_to_b, data_len, user = struct.unpack(
+                    HEADER_FMT, header_data
+                )
+                data_kind = chr(dk_int & 0xFF)
+                call_from = call_from_b.rstrip(b"\x00").decode("ascii", errors="ignore")
+                call_to = call_to_b.rstrip(b"\x00").decode("ascii", errors="ignore")
 
-                # Read data
-                data = self._recv_exact(data_len) if data_len > 0 else b''
+                data = self._recv_exact(data_len) if data_len > 0 else b""
 
                 logger.debug(
-                    f"Received frame: Port={port}, DataKind='{data_kind}', "
-                    f"From={call_from}, To={call_to}, Len={data_len}"
+                    "_reader_thread: port=%d kind='%s' from=%s to=%s data=%d bytes",
+                    port, data_kind, call_from, call_to, len(data),
                 )
 
-                # Dispatch callback if registered
+                # Dispatch to registered callback
                 if data_kind in self._callbacks:
                     try:
                         self._callbacks[data_kind](port, call_from, call_to, data)
-                    except Exception as e:
-                        logger.error(f"Callback error for '{data_kind}': {e}")
+                    except Exception as exc:
+                        logger.error(
+                            "_reader_thread: callback for '%s' raised: %s",
+                            data_kind, exc,
+                        )
 
-                # Queue for receive()
+                # Put in receive queue for receive()
                 self._recv_queue.put((port, data_kind, call_from, call_to, data))
 
-            except AGWPEFrameError as e:
-                logger.warning(f"Frame error: {e}")
+            except AGWPEFrameError as exc:
+                logger.warning("_reader_thread: frame error: %s", exc)
+
             except socket.timeout:
-                continue
-            except socket.error as e:
-                logger.error(f"Read error: {e}")
+                continue   # Normal -- just retry
+
+            except socket.error as exc:
+                if self._running:
+                    logger.error("_reader_thread: socket read error: %s", exc)
+                break
+
+            except Exception as exc:
+                if self._running:
+                    logger.error("_reader_thread: unexpected error: %s", exc)
                 break
 
         logger.info("AGWPE reader thread stopped")
 
     def _recv_exact(self, size: int) -> bytes:
-        """Receive exact number of bytes or raise error."""
-        data = b''
-        while len(data) < size:
-            chunk = self.sock.recv(size - len(data))
-            if not chunk:
-                raise AGWPEFrameError("Connection closed during read")
-            data += chunk
-        return data
-
-    def receive(self, timeout: Optional[float] = None) -> Tuple[int, str, str, str, bytes]:
-        """
-        Receive next frame from queue (port, data_kind, call_from, call_to, data).
+        """Read exactly ``size`` bytes from the socket, blocking as needed.
 
         Args:
-            timeout: Optional queue timeout in seconds
+            size: The exact number of bytes to read.
 
         Returns:
-            Tuple of frame components
+            Exactly ``size`` bytes.
 
         Raises:
-            AGWPEConnectionError on timeout
+            AGWPEFrameError: If the connection closes before all bytes
+                are received.
         """
-        try:
-            return self._recv_queue.get(timeout=timeout)
-        except queue.Empty:
-            raise AGWPEConnectionError("Receive timeout")
+        if size == 0:
+            return b""
+
+        data = b""
+        while len(data) < size:
+            try:
+                chunk = self.sock.recv(size - len(data))
+            except socket.timeout:
+                continue
+
+            if not chunk:
+                raise AGWPEFrameError(
+                    f"Connection closed while reading: needed {size} bytes, "
+                    f"got {len(data)}"
+                )
+            data += chunk
+
+        return data

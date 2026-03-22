@@ -16,7 +16,7 @@ PyAX25_22 implements **AX.25 v2.2** (July 1998) Link Layer protocol in full, wit
   - U-frames (SABM/SABME, UA, DISC, DM, FRMR, UI, XID, TEST)
 - **Modulo 8 and Modulo 128** operation
 - **Full address field**
-  - Source and destination callsigns with SSID (0–15)
+  - Source and destination callsigns with SSID (0-15)
   - Up to 8 digipeaters with proper H-bit (has-been-repeated) handling
   - Command/Response (C) bit support
 - **Bit stuffing and destuffing**
@@ -50,11 +50,13 @@ PyAX25_22 implements **AX.25 v2.2** (July 1998) Link Layer protocol in full, wit
 Implementation based directly on:
 
 - AX.25 Link Access Protocol for Amateur Packet Radio v2.2 (July 1998)
-- Multi-Drop KISS Operation – Karl Medcalf WK5M
-- AGW TCP/IP Socket Interface – George Rossopoulos SV2AGW (2000)
-- AGWPE TCP/IP API Tutorial – Pedro E. Colla LU7DID & SV2AGW
-- PACSAT File Header Definition – Jeff Ward G0/K8KA & Harold Price NK6K
+- Multi-Drop KISS Operation -- Karl Medcalf WK5M
+- AGW TCP/IP Socket Interface -- George Rossopoulos SV2AGW (2000)
+- AGWPE TCP/IP API Tutorial -- Pedro E. Colla LU7DID & SV2AGW
+- PACSAT File Header Definition -- Jeff Ward G0/K8KA & Harold Price NK6K
 
 **PyAX25_22 is fully compliant with AX.25 v2.2 and ready for production use in amateur packet radio applications.**
 
 73 de KE4AHR
+
+Copyright (C) 2026 Kris Kirby, KE4AHR

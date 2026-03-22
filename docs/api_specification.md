@@ -86,3 +86,5 @@ Abstract base for all transports.
 All public APIs have type hints, docstrings, logging, and tests.
 License: LGPLv3.0  
 Copyright (C) 2025-2026 Kris Kirby, KE4AHR
+
+Copyright (C) 2026 Kris Kirby, KE4AHR

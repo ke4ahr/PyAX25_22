@@ -4,11 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pyax25-22"
-version = "0.5.97"
+version = "0.6.5"
 description = "Pure Python implementation of AX.25 v2.2 Layer 2 protocol for amateur radio"
 readme = "README.md"
 authors = [{ name = "Kris Kirby, KE4AHR" }]
-license = { text = "GPL-3.0-or-later" }
+license = { text = "LGPL-3.0-or-later" }
 requires-python = ">=3.8"
 keywords = [
     "ax25",
@@ -28,7 +28,7 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
-    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "License :: OSI Approved :: GNU Lesser General Public License v3 or later (LGPLv3+)",
     "Operating System :: OS Independent",
     "Topic :: Communications :: Ham Radio",
     "Topic :: Software Development :: Libraries :: Python Modules",

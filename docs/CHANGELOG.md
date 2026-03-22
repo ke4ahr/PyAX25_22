@@ -62,3 +62,5 @@ All changes restore full AX.25 v2.2 specification compliance:
 *Previous version - contained 4 critical bugs in framing module*
 
 [Earlier versions omitted for brevity]
+
+Copyright (C) 2026 Kris Kirby, KE4AHR

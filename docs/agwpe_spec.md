@@ -118,3 +118,5 @@ AGWPE (AGW Packet Engine) is a TCP-based protocol for interfacing with packet ra
 1. AGWPE Protocol Documentation
 2. PyAX25_22 Source Code
 3. AX.25 Link Layer Protocol
+
+Copyright (C) 2026 Kris Kirby, KE4AHR

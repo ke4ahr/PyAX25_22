@@ -145,3 +145,5 @@ Full license text: [LICENSE](LICENSE)
 73 de KE4AHR
 
 Copyright (C) 2025-2026 Kris Kirby, KE4AHR
+
+Copyright (C) 2026 Kris Kirby, KE4AHR

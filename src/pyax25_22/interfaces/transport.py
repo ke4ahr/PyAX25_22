@@ -1,23 +1,27 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
-# Copyright (C) 2025-2026 Kris Kirby, KE4AHR
+# Copyright (C) 2026 Kris Kirby, KE4AHR
 
 """
-pyax25_22.interfaces.transport.py
+pyax25_22.interfaces.transport -- Base class for all transport interfaces.
 
-Abstract base class for all transport interfaces in PyAX25_22.
+A transport interface is the part of the library that actually talks to
+the radio hardware or network service. Think of it like a postal worker:
+the AX.25 protocol knows what to write on the envelope, but the transport
+worker knows how to physically deliver it.
 
-Defines the common interface for KISS, AGWPE, and future transports.
-Provides validation utilities for transport-specific compliance.
+This file defines the TransportInterface abstract base class (ABC). All
+concrete transports (KISS over serial, AGWPE over TCP, etc.) must
+inherit from it and implement its abstract methods.
 
-All concrete transports must implement this ABC for consistency.
+Also provides a helper function for checking whether a frame is small
+enough to fit through a given transport type.
 """
 
 from __future__ import annotations
 
 import logging
-
 from abc import ABC, abstractmethod
-from typing import Optional, Any
+from typing import Any, Callable, Dict, Optional
 
 from pyax25_22.core.framing import AX25Frame
 from pyax25_22.core.exceptions import TransportError
@@ -26,118 +30,210 @@ logger = logging.getLogger(__name__)
 
 
 class TransportInterface(ABC):
+    """Abstract base class that all AX.25 transport interfaces must implement.
+
+    Concrete subclasses include KISSInterface (serial port) and
+    AGWPEInterface (TCP/IP to AGWPE server). Any new transport type must
+    also inherit from this class and implement all abstract methods.
+
+    The class also provides a simple callback registry so callers can
+    be notified of events like "frame received" or "connected" without
+    polling.
+
+    Attributes:
+        connected: True if the transport currently has an active link.
+
+    Example::
+
+        class MyTransport(TransportInterface):
+            def connect(self): ...
+            def disconnect(self): ...
+            def send_frame(self, frame): ...
+            def receive(self, timeout=None): ...
     """
-    Abstract base class for all AX.25 transport interfaces.
 
-    Defines the standard API for:
-    - Connecting/disconnecting
-    - Sending/receiving frames
-    - Configuration and status
-    - Error handling and callbacks
-
-    Concrete implementations (KISS, AGWPE) must inherit from this.
-    """
-
-    def __init__(self):
+    def __init__(self) -> None:
+        """Initialize the base state (not connected, no callbacks)."""
         self.connected: bool = False
-        self._callbacks: dict[str, Callable] = {}  # Event -> callback
+        self._callbacks: Dict[str, Callable] = {}
+
+    # -----------------------------------------------------------------------
+    # Abstract interface (must be implemented by subclasses)
+    # -----------------------------------------------------------------------
 
     @abstractmethod
     def connect(self) -> None:
-        """
-        Establish connection to the transport medium.
+        """Open the transport connection (serial port, TCP socket, etc.).
+
+        Must set ``self.connected = True`` on success.
 
         Raises:
-            TransportError on connection failure
+            TransportError: If the connection cannot be opened. Callers
+                should catch this and report it to the user.
         """
-        pass
 
     @abstractmethod
     def disconnect(self) -> None:
-        """
-        Gracefully disconnect from the transport.
+        """Close the transport connection and clean up resources.
+
+        Must set ``self.connected = False``. Should not raise if the
+        transport is already disconnected.
 
         Raises:
-            TransportError on disconnection failure
+            TransportError: If closing fails in an unexpected way.
         """
-        pass
 
     @abstractmethod
     def send_frame(self, frame: AX25Frame, **kwargs: Any) -> None:
-        """
-        Send an AX.25 frame over the transport.
+        """Send one AX.25 frame over the transport.
+
+        The exact encoding depends on the transport type. KISS wraps
+        the frame in FEND bytes with escaping. AGWPE wraps it in a
+        36-byte binary header.
 
         Args:
-            frame: The frame to transmit
-            **kwargs: Transport-specific parameters (e.g., port for AGWPE)
+            frame: The AX25Frame to transmit. Must already be built and
+                validated.
+            **kwargs: Transport-specific extra parameters. For example,
+                AGWPE uses ``port`` to select the radio port.
 
         Raises:
-            TransportError on send failure
+            TransportError: If the frame cannot be sent. This includes
+                serial write errors, TCP errors, and size limits.
         """
-        pass
 
     @abstractmethod
     def receive(self, timeout: Optional[float] = None) -> AX25Frame:
-        """
-        Receive next available frame.
+        """Wait for and return the next incoming frame.
+
+        Blocks until a frame arrives or the timeout expires.
 
         Args:
-            timeout: Optional timeout in seconds
+            timeout: How many seconds to wait. None means wait forever.
+                0 means return immediately (non-blocking check).
 
         Returns:
-            Received AX25Frame
+            The next received AX25Frame.
 
         Raises:
-            TransportError on timeout or error
+            TransportError: If the timeout expires or a read error occurs.
         """
-        pass
+
+    # -----------------------------------------------------------------------
+    # Callback registry (available to all transports)
+    # -----------------------------------------------------------------------
 
     def register_callback(self, event: str, callback: Callable) -> None:
-        """
-        Register callback for transport events.
+        """Register a function to call when a named event happens.
+
+        Common event names are:
+          - ``"frame_received"``: A new frame has arrived.
+          - ``"connected"``: The transport link came up.
+          - ``"disconnected"``: The transport link went down.
+
+        Subclasses may define additional event names.
 
         Args:
-            event: Event name (e.g., 'frame_received', 'connected')
-            callback: Function to call
+            event: The event name string. Must not be empty.
+            callback: A callable that accepts whatever arguments the
+                event provides. See the specific transport for details.
+
+        Example::
+
+            def on_frame(frame):
+                print(f"Got frame from {frame.source.callsign}")
+
+            transport.register_callback("frame_received", on_frame)
         """
+        if not event:
+            raise ValueError("event name must not be empty")
         self._callbacks[event] = callback
-        logger.debug(f"Registered callback for event '{event}'")
+        logger.debug("Registered callback for event '%s'", event)
 
     def _trigger_callback(self, event: str, *args: Any) -> None:
-        """
-        Internal: Trigger registered callback if exists.
+        """Fire a registered callback with the given arguments.
+
+        If no callback is registered for the event, does nothing.
+        If the callback raises, logs the error and does not re-raise
+        (so one bad callback does not break the reader thread).
 
         Args:
-            event: Event name
-            *args: Arguments to pass to callback
+            event: The event name. If not registered, silently ignored.
+            *args: Arguments to pass to the callback function.
         """
-        if event in self._callbacks:
-            try:
-                self._callbacks[event](*args)
-                logger.debug(f"Triggered callback for '{event}'")
-            except Exception as e:
-                logger.error(f"Callback error for '{event}': {e}")
+        if event not in self._callbacks:
+            return
+
+        try:
+            self._callbacks[event](*args)
+            logger.debug("Triggered callback for event '%s'", event)
+        except Exception as exc:
+            logger.error(
+                "Callback for event '%s' raised an exception: %s", event, exc
+            )
 
 
-def validate_frame_for_transport(frame: AX25Frame, transport_type: str) -> None:
-    """
-    Validate frame compatibility with specific transport.
+# ---------------------------------------------------------------------------
+# Transport validation helper
+# ---------------------------------------------------------------------------
+
+def validate_frame_for_transport(
+    frame: AX25Frame,
+    transport_type: str,
+) -> None:
+    """Check that a frame is small enough for the given transport type.
+
+    Different transport types have different practical frame size limits:
+      - KISS: Typically up to 512 bytes after bit stuffing.
+      - AGWPE: Practical limit around 4096 bytes.
+
+    This function encodes the frame to bytes and checks the encoded length.
 
     Args:
-        frame: Frame to validate
-        transport_type: 'KISS' or 'AGWPE'
+        frame: The AX25Frame to check. It will be encoded to measure size.
+        transport_type: The transport type string: ``"KISS"`` or ``"AGWPE"``.
+            Case-sensitive.
 
     Raises:
-        TransportError if incompatible
+        TransportError: If the encoded frame is too large for the transport.
+
+    Example::
+
+        validate_frame_for_transport(my_frame, "KISS")
+        transport.send_frame(my_frame)
     """
-    if transport_type == 'KISS':
-        # KISS max frame size typically 256-512 bytes
-        if len(frame.encode()) > 512:
-            raise TransportError(f"Frame too large for KISS: {len(frame.encode())} bytes")
+    encoded = frame.encode()
+    size = len(encoded)
 
-    elif transport_type == 'AGWPE':
-        # AGWPE has no strict limit but practical ~4KB
-        if len(frame.encode()) > 4096:
-            raise TransportError(f"Frame too large for AGWPE: {len(frame.encode())} bytes")
+    logger.debug(
+        "validate_frame_for_transport: transport=%s encoded_size=%d bytes",
+        transport_type, size,
+    )
 
-    logger.debug(f"Frame validated for {transport_type} transport")
+    if transport_type == "KISS":
+        limit = 512
+        if size > limit:
+            raise TransportError(
+                f"Frame is {size} bytes, which exceeds the KISS transport "
+                f"limit of {limit} bytes -- reduce the information field size"
+            )
+
+    elif transport_type == "AGWPE":
+        limit = 4096
+        if size > limit:
+            raise TransportError(
+                f"Frame is {size} bytes, which exceeds the AGWPE practical "
+                f"limit of {limit} bytes -- reduce the information field size"
+            )
+
+    else:
+        logger.warning(
+            "validate_frame_for_transport: unknown transport type '%s' -- "
+            "skipping size check",
+            transport_type,
+        )
+
+    logger.debug(
+        "validate_frame_for_transport: %s frame OK (%d bytes)",
+        transport_type, size,
+    )

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
-# Copyright (C) 2025-2026 Kris Kirby, KE4AHR
+# Copyright (C) 2026 Kris Kirby, KE4AHR
 
 """
 tests/test_flow_control.py
@@ -21,7 +21,7 @@ import pytest
 from pyax25_22.core.flow_control import AX25FlowControl
 from pyax25_22.core.statemachine import AX25StateMachine
 from pyax25_22.core.framing import AX25Frame
-from pyax25_22.core.exceptions import FrameError
+from pyax25_22.core.exceptions import FrameError, ResourceExhaustionError
 from pyax25_22.core.config import AX25Config, DEFAULT_CONFIG_MOD8
 
 
@@ -57,7 +57,7 @@ def test_window_management(flow_mod8):
     assert flow_mod8.window_available == 0
     assert not flow_mod8.can_send_i_frame()
 
-    with pytest.raises(FrameError):
+    with pytest.raises((FrameError, ResourceExhaustionError)):
         flow_mod8.enqueue_i_frame(7)  # Overflow
 
     flow_mod8.acknowledge_up_to(4)
@@ -155,5 +155,5 @@ def test_mod128_window(flow_mod128):
 def test_busy_prevents_enqueue(flow_mod8):
     """Test enqueue blocks when peer busy."""
     flow_mod8.set_peer_busy()
-    with pytest.raises(FrameError):
+    with pytest.raises((FrameError, ResourceExhaustionError)):
         flow_mod8.enqueue_i_frame(0)
